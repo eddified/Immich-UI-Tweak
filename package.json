@@ -1,0 +1,25 @@
+{
+  "name": "immich-ui-helper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node esbuild.config.mjs && node scripts/copy-static.mjs",
+    "dev:browser": "npm run build && tsx scripts/dev-browser.ts",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "vitest run",
+    "playwright:install": "playwright install chromium",
+    "test:e2e": "npm run build && playwright test",
+    "test:e2e:headed": "npm run build && HEADED=1 playwright test",
+    "test:e2e:ui": "npm run build && playwright test --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0",
+    "@types/chrome": "^0.0.280",
+    "@types/node": "^22.13.10",
+    "esbuild": "^0.24.2",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.5"
+  }
+}

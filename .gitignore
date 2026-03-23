@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.chrome-profile-dev/
+test-results/
+playwright-report/
+playwright/.cache/
+.playwright-browsers/
+*.log

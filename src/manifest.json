@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Immich UI Helper",
+  "version": "0.1.0",
+  "description": "Uploader avatars and Docker path mapping for Immich web.",
+  "permissions": ["storage", "scripting", "tabs"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {},
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["injected.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
