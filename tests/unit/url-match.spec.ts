@@ -22,7 +22,35 @@ describe('isUrlEnabled', () => {
     expect(isUrlEnabled('https://evil.com/', ['https://demo.immich.app'])).toBe(false);
   });
 
+  it('does not match longer host that merely string-extends the allowed host', () => {
+    expect(
+      isUrlEnabled('https://demo.immich.app.attacker.test/photos', ['https://demo.immich.app']),
+    ).toBe(false);
+  });
+
+  it('does not match path that extends the allowed path without a segment boundary', () => {
+    expect(
+      isUrlEnabled('https://demo.immich.app/teamfoo/x', ['https://demo.immich.app/team']),
+    ).toBe(false);
+  });
+
+  it('matches path prefix at a segment boundary', () => {
+    expect(
+      isUrlEnabled('https://demo.immich.app/team/photos/x', ['https://demo.immich.app/team']),
+    ).toBe(true);
+  });
+
+  it('matches exact path prefix', () => {
+    expect(isUrlEnabled('https://demo.immich.app/team', ['https://demo.immich.app/team'])).toBe(
+      true,
+    );
+  });
+
   it('returns false for empty list', () => {
     expect(isUrlEnabled('https://demo.immich.app/', [])).toBe(false);
+  });
+
+  it('returns false when prefix is not a valid URL', () => {
+    expect(isUrlEnabled('https://demo.immich.app/photos', ['not-a-valid-url'])).toBe(false);
   });
 });
