@@ -48,6 +48,10 @@ let detailPanelMounted = false;
 let fileLocationAssetKey = '';
 let sawPathLinkThisAsset = false;
 let didAutoClickShowLocation = false;
+/**
+ * User hid the path while the viewer stayed open — keep it hidden on prev/next, like Immich `showAssetPath` persisting
+ * across assets (reset when the info panel is closed/remounted or the path is shown again).
+ */
 let userDismissedPathThisAsset = false;
 
 const ownerByAsset = new Map<string, string>();
@@ -398,7 +402,7 @@ function resetFileLocationTrackingIfAssetChanged(): void {
     fileLocationAssetKey = key;
     sawPathLinkThisAsset = false;
     didAutoClickShowLocation = false;
-    userDismissedPathThisAsset = false;
+    /* Keep userDismissedPathThisAsset — same idea as Immich not resetting showAssetPath on asset change. */
   }
 }
 
@@ -640,7 +644,7 @@ function schedulePartnerPathInjection(panel: HTMLElement, assetId: string): void
   void inflight.then(() => scheduleDomUpdate());
 }
 
-/** Immich-native path row only — ignore our injected row or we remove it and set `userDismissedPathThisAsset`. */
+/** Immich-native path row only — ignore our injected row (same folder-link shape). */
 function findFolderPathLink(panel: HTMLElement): HTMLAnchorElement | null {
   const links = panel.querySelectorAll<HTMLAnchorElement>('a[href*="/folders"]');
   for (const a of links) {
@@ -696,6 +700,7 @@ function expandAndRewriteFilePath(): void {
   const link = findFolderPathLink(panel);
   if (link) {
     removeInjectedPartnerPath(panel);
+    userDismissedPathThisAsset = false;
     sawPathLinkThisAsset = true;
     const raw = link.textContent?.trim() ?? '';
     if (!raw) return;
