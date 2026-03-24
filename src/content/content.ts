@@ -67,10 +67,10 @@ const pathInjectionUseNativeOnly = new Set<string>();
 const pendingPartnerPathByAssetId = new Map<string, string>();
 /** Dedupe concurrent GET /api/users/me when navbar/`sessionUserId` is not ready yet (cold photo loads). */
 let resolveMeUserIdInflight: Promise<string | null> | null = null;
-/** Profile photo blobs when user.profileImagePath is set (UserAvatar shows img). */
-const profileBlobUrlByOwner = new Map<string, string>();
 let injectRequested = false;
 let rafScheduled = false;
+/** Invalidate in-flight partner badge work when the same overlay is rescheduled (MutationObserver churn). */
+const badgeRenderGenByContainer = new WeakMap<HTMLElement, number>();
 
 function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
   chrome.storage.sync.get(
@@ -146,10 +146,6 @@ function shouldShowPartnerUploader(ownerId: string): boolean {
 }
 
 function removeExtensionElements(): void {
-  for (const url of profileBlobUrlByOwner.values()) {
-    URL.revokeObjectURL(url);
-  }
-  profileBlobUrlByOwner.clear();
   userByOwnerId.clear();
   userFetchInflight.clear();
   partnerPathInflight.clear();
@@ -200,31 +196,26 @@ async function fetchUser(ownerId: string): Promise<ImmichUserPublic | null> {
   return inflight;
 }
 
-async function ensureProfilePhotoBlob(ownerId: string, user: ImmichUserPublic): Promise<string | null> {
-  const hit = profileBlobUrlByOwner.get(ownerId);
-  if (hit) return hit;
-  const url = profileImageAbsoluteUrl(ownerId, user.profileChangedAt);
-  try {
-    const res = await fetch(url, { credentials: 'include' });
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    if (!blob.size) return null;
-    const burl = URL.createObjectURL(blob);
-    profileBlobUrlByOwner.set(ownerId, burl);
-    return burl;
-  } catch {
-    return null;
-  }
-}
-
 function renderLetterFigure(
   figure: HTMLElement,
   letter: string,
   avatarColor: string,
   size: 'thumb' | 'viewer',
 ): void {
+  const bg = AVATAR_COLOR_BG[avatarColor] ?? AVATAR_COLOR_BG.gray;
+  const existingSpan = figure.querySelector<HTMLElement>('span.immich-ui-helper-avatar-letter');
+  if (
+    existingSpan &&
+    existingSpan.dataset.immichUiHelperAvatarLetter === letter &&
+    figure.classList.contains(`immich-ui-helper-avatar--${size}`) &&
+    figure.classList.contains('immich-ui-helper-avatar--letter')
+  ) {
+    if (figure.style.backgroundColor !== bg) figure.style.backgroundColor = bg;
+    return;
+  }
+
   figure.className = `immich-ui-helper-avatar immich-ui-helper-avatar--${size} immich-ui-helper-avatar--letter`;
-  figure.style.backgroundColor = AVATAR_COLOR_BG[avatarColor] ?? AVATAR_COLOR_BG.gray;
+  figure.style.backgroundColor = bg;
   figure.style.color = '#f8fafc';
   const span = document.createElement('span');
   span.className = 'immich-ui-helper-avatar-letter';
@@ -233,7 +224,12 @@ function renderLetterFigure(
   figure.replaceChildren(span);
 }
 
-function renderPhotoFigure(figure: HTMLElement, blobUrl: string, size: 'thumb' | 'viewer', user: ImmichUserPublic): void {
+function renderPhotoFigure(figure: HTMLElement, photoUrl: string, size: 'thumb' | 'viewer', user: ImmichUserPublic): void {
+  const existing = figure.querySelector<HTMLImageElement>('img.immich-ui-helper-avatar-img');
+  if (existing && existing.src === photoUrl) {
+    return;
+  }
+
   figure.className = `immich-ui-helper-avatar immich-ui-helper-avatar--${size} immich-ui-helper-avatar--photo`;
   figure.style.backgroundColor = '';
   figure.style.color = '';
@@ -241,7 +237,7 @@ function renderPhotoFigure(figure: HTMLElement, blobUrl: string, size: 'thumb' |
   img.className = 'immich-ui-helper-avatar-img';
   img.alt = '';
   img.decoding = 'async';
-  img.src = blobUrl;
+  img.src = photoUrl;
   img.onerror = () => {
     img.onerror = null;
     renderLetterFigure(figure, avatarInitialLetter(user.name, user.email), user.avatarColor, size);
@@ -254,11 +250,19 @@ function renderPhotoFigure(figure: HTMLElement, blobUrl: string, size: 'thumb' |
  */
 function scheduleUploaderBadge(container: HTMLElement, ownerId: string, size: 'thumb' | 'viewer'): void {
   container.dataset.immichUiHelperBadgeOwner = ownerId;
+  const myGen = (badgeRenderGenByContainer.get(container) ?? 0) + 1;
+  badgeRenderGenByContainer.set(container, myGen);
 
   void (async () => {
     const jobOwner = ownerId;
     const user = await fetchUser(jobOwner);
-    if (container.dataset.immichUiHelperBadgeOwner !== jobOwner || !container.isConnected) return;
+    if (
+      badgeRenderGenByContainer.get(container) !== myGen ||
+      container.dataset.immichUiHelperBadgeOwner !== jobOwner ||
+      !container.isConnected
+    ) {
+      return;
+    }
 
     let figure = container.querySelector<HTMLElement>('figure.immich-ui-helper-avatar');
     if (!figure) {
@@ -267,24 +271,38 @@ function scheduleUploaderBadge(container: HTMLElement, ownerId: string, size: 't
     }
 
     if (!user) {
+      const sig = `${jobOwner}|err`;
+      if (container.dataset.immichUiHelperBadgeSig === sig) return;
       renderLetterFigure(figure, '?', 'gray', size);
+      container.dataset.immichUiHelperBadgeSig = sig;
       return;
     }
 
     const hasPhoto = Boolean(user.profileImagePath?.trim());
+    const changed = user.profileChangedAt ?? '';
     if (!hasPhoto) {
-      renderLetterFigure(figure, avatarInitialLetter(user.name, user.email), user.avatarColor, size);
+      const letter = avatarInitialLetter(user.name, user.email);
+      const sig = `${jobOwner}|${changed}|l|${letter}|${user.avatarColor}`;
+      if (container.dataset.immichUiHelperBadgeSig === sig) return;
+      renderLetterFigure(figure, letter, user.avatarColor, size);
+      container.dataset.immichUiHelperBadgeSig = sig;
       return;
     }
 
-    const blobUrl = await ensureProfilePhotoBlob(jobOwner, user);
-    if (container.dataset.immichUiHelperBadgeOwner !== jobOwner || !container.isConnected) return;
+    resolveImmichUsersApiBase();
+    const photoUrl = profileImageAbsoluteUrl(jobOwner, user.profileChangedAt);
+    const sig = `${jobOwner}|${changed}|p|${photoUrl}`;
+    if (container.dataset.immichUiHelperBadgeSig === sig) return;
 
-    if (blobUrl) {
-      renderPhotoFigure(figure, blobUrl, size, user);
-    } else {
-      renderLetterFigure(figure, avatarInitialLetter(user.name, user.email), user.avatarColor, size);
+    renderPhotoFigure(figure, photoUrl, size, user);
+    if (
+      badgeRenderGenByContainer.get(container) !== myGen ||
+      container.dataset.immichUiHelperBadgeOwner !== jobOwner ||
+      !container.isConnected
+    ) {
+      return;
     }
+    container.dataset.immichUiHelperBadgeSig = sig;
   })();
 }
 
