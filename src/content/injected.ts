@@ -1,3 +1,7 @@
+import {
+  parseOriginalPathFromAssetJson,
+  parseOwnerIdFromAssetJson,
+} from '../shared/asset-original-path';
 import { parseOwnerPairsFromJson } from '../shared/bucket-parse';
 import { parseJsonMaybeDoubleEncoded } from '../shared/json-parse';
 import { parseCurrentUserIdFromMeJson } from '../shared/immich-user';
@@ -12,6 +16,8 @@ const MSG_SOURCE = 'immich-ui-helper';
 const MSG_TYPE = 'ownerPairs';
 /** Emitted when Immich's own `fetch` returns `/api/users/me` — no extra requests from the extension. */
 const MSG_CURRENT_USER = 'currentUser';
+/** Single-asset GET body (same auth/cookies as the page — content script fetch may not see session). */
+const MSG_ASSET_DETAIL = 'assetDetail';
 
 function shouldCloneApiResponse(urlStr: string): boolean {
   try {
@@ -20,7 +26,7 @@ function shouldCloneApiResponse(urlStr: string): boolean {
     if (p === '/api/users/me') return true;
     if (p.includes('/api/timeline/bucket')) return true;
     if (p.includes('/api/search/metadata')) return true;
-    if (/^\/api\/assets\/[0-9a-f-]{36}$/i.test(p)) return true;
+    if (/^\/api\/assets\/[0-9a-f-]{36}\/?$/i.test(p)) return true;
     return false;
   } catch {
     return false;
@@ -42,6 +48,30 @@ function emitCurrentUserFromMeResponse(urlStr: string, body: unknown): void {
   const id = parseCurrentUserIdFromMeJson(body);
   if (!id) return;
   window.postMessage({ source: MSG_SOURCE, type: MSG_CURRENT_USER, userId: id }, '*');
+}
+
+function emitAssetDetailFromResponse(urlStr: string, body: unknown): void {
+  try {
+    const u = new URL(urlStr, location.origin);
+    const m = u.pathname.match(/^\/api\/assets\/([0-9a-f-]{36})\/?$/i);
+    if (!m) return;
+    const assetId = m[1].toLowerCase();
+    const ownerId = parseOwnerIdFromAssetJson(body);
+    const originalPath = parseOriginalPathFromAssetJson(body);
+    if (!ownerId && !originalPath) return;
+    window.postMessage(
+      {
+        source: MSG_SOURCE,
+        type: MSG_ASSET_DETAIL,
+        assetId,
+        ownerId,
+        originalPath,
+      },
+      '*',
+    );
+  } catch {
+    /* ignore */
+  }
 }
 
 function patchFetch(): void {
@@ -74,6 +104,7 @@ function patchFetch(): void {
           const data = parseJsonMaybeDoubleEncoded(text);
           emitPairs(data);
           emitCurrentUserFromMeResponse(urlStr, data);
+          emitAssetDetailFromResponse(urlStr, data);
         } catch {
           /* ignore */
         }
