@@ -11,7 +11,7 @@ export function demoOrigin(): string {
 export async function applyDemoExtensionSettings(page: Page, extensionId: string): Promise<void> {
   const demo = process.env.IMMICH_DEMO_ORIGIN ?? 'https://demo.immich.app';
   await page.goto(`chrome-extension://${extensionId}/options.html`);
-  // Match Playwright fresh profile + DEFAULT_SETTINGS.showPartnerIcons (persistent dev profiles may differ).
+  // Match Playwright fresh profile + overlay defaults (persistent dev profiles may differ).
   await page.locator('#show-partner-icons').setChecked(true);
   await page.locator('#url-list input').first().fill(`${demo}/`);
   const rows = page.locator('#mapping-body tr');

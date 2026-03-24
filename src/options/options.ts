@@ -14,7 +14,12 @@ const addUrlBtn = document.getElementById('add-url') as HTMLButtonElement;
 const addMappingBtn = document.getElementById('add-mapping') as HTMLButtonElement;
 const saveBtn = document.getElementById('save') as HTMLButtonElement;
 const showPartnerIcons = document.getElementById('show-partner-icons') as HTMLInputElement;
+const showOwnProfileIcon = document.getElementById('show-own-profile-icon') as HTMLInputElement;
 const saveStatus = document.getElementById('save-status') as HTMLParagraphElement;
+
+function syncOwnProfileCheckboxEnabled(): void {
+  showOwnProfileIcon.disabled = !showPartnerIcons.checked;
+}
 
 function rowUrl(value: string): HTMLLIElement {
   const li = document.createElement('li');
@@ -91,6 +96,8 @@ function render(settings: ExtensionSettings): void {
   }
 
   showPartnerIcons.checked = settings.showPartnerIcons;
+  showOwnProfileIcon.checked = settings.showOwnProfileIcon;
+  syncOwnProfileCheckboxEnabled();
 }
 
 function load(): void {
@@ -99,6 +106,7 @@ function load(): void {
       STORAGE_KEYS.enabledUrls,
       STORAGE_KEYS.pathMappings,
       STORAGE_KEYS.showPartnerIcons,
+      STORAGE_KEYS.showOwnProfileIcon,
     ],
     (sync) => {
       const settings: ExtensionSettings = {
@@ -112,6 +120,10 @@ function load(): void {
           typeof sync[STORAGE_KEYS.showPartnerIcons] === 'boolean'
             ? (sync[STORAGE_KEYS.showPartnerIcons] as boolean)
             : DEFAULT_SETTINGS.showPartnerIcons,
+        showOwnProfileIcon:
+          typeof sync[STORAGE_KEYS.showOwnProfileIcon] === 'boolean'
+            ? (sync[STORAGE_KEYS.showOwnProfileIcon] as boolean)
+            : DEFAULT_SETTINGS.showOwnProfileIcon,
       };
       const empty = Object.keys(sync).length === 0;
       if (empty) {
@@ -119,6 +131,7 @@ function load(): void {
           [STORAGE_KEYS.enabledUrls]: DEFAULT_SETTINGS.enabledUrls,
           [STORAGE_KEYS.pathMappings]: DEFAULT_SETTINGS.pathMappings,
           [STORAGE_KEYS.showPartnerIcons]: DEFAULT_SETTINGS.showPartnerIcons,
+          [STORAGE_KEYS.showOwnProfileIcon]: DEFAULT_SETTINGS.showOwnProfileIcon,
         });
         render(DEFAULT_SETTINGS);
       } else {
@@ -155,6 +168,7 @@ function save(): void {
     [STORAGE_KEYS.enabledUrls]: urls,
     [STORAGE_KEYS.pathMappings]: mappings,
     [STORAGE_KEYS.showPartnerIcons]: showPartnerIcons.checked,
+    [STORAGE_KEYS.showOwnProfileIcon]: showOwnProfileIcon.checked,
   };
 
   chrome.storage.sync.set(payload, () => {
@@ -176,5 +190,9 @@ addMappingBtn.addEventListener('click', () => {
 });
 
 saveBtn.addEventListener('click', save);
+
+showPartnerIcons.addEventListener('change', () => {
+  syncOwnProfileCheckboxEnabled();
+});
 
 load();

@@ -100,7 +100,7 @@ test.describe('Immich demo (extension loaded)', () => {
       state: 'visible',
       timeout: 30_000,
     });
-    // Own assets: extension shows partner uploader only — no self badge in the viewer.
+    // Own assets: no viewer overlay unless Show Own Profile Icon is on (default off).
     await expect(appPage.locator('.immich-ui-helper-viewer-avatar')).toHaveCount(0, { timeout: 15_000 });
 
     await ensureAssetViewerDetailPanelOpen(appPage);

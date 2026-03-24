@@ -79,6 +79,7 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
       STORAGE_KEYS.enabledUrls,
       STORAGE_KEYS.pathMappings,
       STORAGE_KEYS.showPartnerIcons,
+      STORAGE_KEYS.showOwnProfileIcon,
     ],
     (sync) => {
       const enabledUrls = Array.isArray(sync[STORAGE_KEYS.enabledUrls])
@@ -91,10 +92,15 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
         typeof sync[STORAGE_KEYS.showPartnerIcons] === 'boolean'
           ? (sync[STORAGE_KEYS.showPartnerIcons] as boolean)
           : DEFAULT_SETTINGS.showPartnerIcons;
+      const showOwnProfileIcon =
+        typeof sync[STORAGE_KEYS.showOwnProfileIcon] === 'boolean'
+          ? (sync[STORAGE_KEYS.showOwnProfileIcon] as boolean)
+          : DEFAULT_SETTINGS.showOwnProfileIcon;
       cb({
         enabledUrls: enabledUrls.slice(0, 32),
         pathMappings,
         showPartnerIcons,
+        showOwnProfileIcon,
       });
     },
   );
@@ -141,9 +147,11 @@ function syncSessionUserIdFromNavbar(): void {
   }
 }
 
-function shouldShowPartnerUploader(ownerId: string): boolean {
+function shouldShowUploaderOverlay(ownerId: string): boolean {
   if (sessionUserId === undefined) return true;
-  return ownerId.toLowerCase() !== sessionUserId.toLowerCase();
+  const isOwn = ownerId.toLowerCase() === sessionUserId.toLowerCase();
+  if (isOwn) return settings.showOwnProfileIcon;
+  return true;
 }
 
 function removeExtensionElements(): void {
@@ -346,7 +354,7 @@ function updateThumbnailOverlays(): void {
       return;
     }
 
-    if (!shouldShowPartnerUploader(ownerId)) {
+    if (!shouldShowUploaderOverlay(ownerId)) {
       thumb.querySelector('.immich-ui-helper-uploader-overlay')?.remove();
       thumb.classList.remove('immich-ui-helper-thumb-anchor');
       return;
@@ -390,7 +398,7 @@ function updateViewerOverlay(): void {
     return;
   }
 
-  if (!shouldShowPartnerUploader(ownerId)) {
+  if (!shouldShowUploaderOverlay(ownerId)) {
     actions.querySelector('.immich-ui-helper-viewer-avatar')?.remove();
     return;
   }
@@ -807,7 +815,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (
     changes[STORAGE_KEYS.enabledUrls] ||
     changes[STORAGE_KEYS.pathMappings] ||
-    changes[STORAGE_KEYS.showPartnerIcons]
+    changes[STORAGE_KEYS.showPartnerIcons] ||
+    changes[STORAGE_KEYS.showOwnProfileIcon]
   ) {
     readSettingsFromStorage((s) => {
       settings = s;
