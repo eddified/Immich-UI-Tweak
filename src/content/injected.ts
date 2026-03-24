@@ -4,7 +4,7 @@ import {
 } from '../shared/asset-original-path';
 import { parseOwnerPairsFromJson } from '../shared/bucket-parse';
 import { parseJsonMaybeDoubleEncoded } from '../shared/json-parse';
-import { parseCurrentUserIdFromMeJson } from '../shared/immich-user';
+import { parseCurrentUserIdFromMeJson, parseUserJson } from '../shared/immich-user';
 
 declare global {
   interface Window {
@@ -18,15 +18,19 @@ const MSG_TYPE = 'ownerPairs';
 const MSG_CURRENT_USER = 'currentUser';
 /** Single-asset GET body (same auth/cookies as the page — content script fetch may not see session). */
 const MSG_ASSET_DETAIL = 'assetDetail';
+/** `GET /api/users/:id` user DTO — partner badge cache; avoids duplicate fetch from content script. */
+const MSG_USER_DETAIL = 'userDetail';
 
-function shouldCloneApiResponse(urlStr: string): boolean {
+function shouldCloneApiResponse(urlStr: string, method: string): boolean {
   try {
     const u = new URL(urlStr, location.origin);
     const p = u.pathname;
+    const m = method.toUpperCase();
     if (p === '/api/users/me') return true;
     if (p.includes('/api/timeline/bucket')) return true;
     if (p.includes('/api/search/metadata')) return true;
     if (/^\/api\/assets\/[0-9a-f-]{36}\/?$/i.test(p)) return true;
+    if (/^\/api\/users\/[0-9a-f-]{36}\/?$/i.test(p)) return m === 'GET';
     return false;
   } catch {
     return false;
@@ -74,6 +78,20 @@ function emitAssetDetailFromResponse(urlStr: string, body: unknown): void {
   }
 }
 
+function emitUserDetailFromResponse(urlStr: string, body: unknown): void {
+  try {
+    const u = new URL(urlStr, location.origin);
+    const m = u.pathname.match(/^\/api\/users\/([0-9a-f-]{36})\/?$/i);
+    if (!m) return;
+    const ownerId = m[1].toLowerCase();
+    const user = parseUserJson(body);
+    if (!user) return;
+    window.postMessage({ source: MSG_SOURCE, type: MSG_USER_DETAIL, ownerId, user }, '*');
+  } catch {
+    /* ignore */
+  }
+}
+
 function patchFetch(): void {
   if (window.__immichUiHelperFetchPatched) return;
   window.__immichUiHelperFetchPatched = true;
@@ -93,7 +111,14 @@ function patchFetch(): void {
       urlStr = input.url;
     }
 
-    if (!res.ok || !shouldCloneApiResponse(urlStr)) {
+    const method =
+      typeof init?.method === 'string'
+        ? init.method
+        : input instanceof Request
+          ? input.method
+          : 'GET';
+
+    if (!res.ok || !shouldCloneApiResponse(urlStr, method)) {
       return res;
     }
 
@@ -105,6 +130,7 @@ function patchFetch(): void {
           emitPairs(data);
           emitCurrentUserFromMeResponse(urlStr, data);
           emitAssetDetailFromResponse(urlStr, data);
+          emitUserDetailFromResponse(urlStr, data);
         } catch {
           /* ignore */
         }

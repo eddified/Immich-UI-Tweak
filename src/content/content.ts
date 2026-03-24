@@ -27,6 +27,7 @@ const MSG_SOURCE = 'immich-ui-helper';
 const MSG_TYPE = 'ownerPairs';
 const MSG_CURRENT_USER = 'currentUser';
 const MSG_ASSET_DETAIL = 'assetDetail';
+const MSG_USER_DETAIL = 'userDetail';
 
 type AssetApiDetail = { ownerId: string | null; originalPath: string | null };
 /** Latest GET /api/assets/:id body fields from the page's own fetch (main world). */
@@ -757,8 +758,18 @@ window.addEventListener('message', (event) => {
     assetId?: string;
     ownerId?: string | null;
     originalPath?: string | null;
+    user?: unknown;
   };
   if (d?.source !== MSG_SOURCE) return;
+
+  if (d.type === MSG_USER_DETAIL && typeof d.ownerId === 'string') {
+    const u = parseUserJson(d.user);
+    if (u && u.id.toLowerCase() === d.ownerId.toLowerCase()) {
+      userByOwnerId.set(d.ownerId.toLowerCase(), u);
+      scheduleDomUpdate();
+    }
+    return;
+  }
 
   if (d.type === MSG_CURRENT_USER && typeof d.userId === 'string') {
     sessionUserId = d.userId.toLowerCase();
