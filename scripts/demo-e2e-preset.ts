@@ -8,24 +8,56 @@ export function demoOrigin(): string {
   return process.env.IMMICH_DEMO_ORIGIN ?? 'https://demo.immich.app';
 }
 
-export async function applyDemoExtensionSettings(page: Page, extensionId: string): Promise<void> {
-  const demo = process.env.IMMICH_DEMO_ORIGIN ?? 'https://demo.immich.app';
-  await page.goto(`chrome-extension://${extensionId}/options.html`);
-  // Match Playwright fresh profile + overlay defaults (persistent dev profiles may differ).
-  await page.locator('#show-partner-icons').setChecked(true);
-  await page.locator('#url-list input').first().fill(`${demo}/`);
-  const rows = page.locator('#mapping-body tr');
-  if ((await rows.count()) === 0) {
-    await page.locator('#add-mapping').click();
+export type DemoPathMapping = { localPath: string; immichPath: string };
+
+export type SiteExtensionSettings = {
+  /** e.g. `https://photos.example.com` (trailing slash optional). */
+  enabledOrigin: string;
+  pathMappings: DemoPathMapping[];
+};
+
+export async function applyExtensionSettingsForSite(
+  page: Page,
+  extensionId: string,
+  site: SiteExtensionSettings,
+): Promise<void> {
+  const origin = site.enabledOrigin.replace(/\/$/, '');
+  const rows = site.pathMappings;
+  if (rows.length === 0) {
+    throw new Error('applyExtensionSettingsForSite: pathMappings must be non-empty');
   }
-  const firstRow = page.locator('#mapping-body tr').first();
-  const inputs = firstRow.locator('input');
-  await inputs.nth(0).fill('/var/test');
-  await inputs.nth(1).fill('/data/upload');
+  await page.goto(`chrome-extension://${extensionId}/options.html`);
+  await page.locator('#show-partner-icons').setChecked(true);
+  await page.locator('#url-list input').first().fill(`${origin}/`);
+  const mappingRows = page.locator('#mapping-body tr');
+  const addMapping = page.locator('#add-mapping');
+  while ((await mappingRows.count()) < rows.length) {
+    await addMapping.click();
+  }
+  for (let i = 0; i < rows.length; i++) {
+    const row = mappingRows.nth(i);
+    const inputs = row.locator('input');
+    await inputs.nth(0).fill(rows[i].localPath);
+    await inputs.nth(1).fill(rows[i].immichPath);
+  }
   await page.locator('#save').click();
   await page.locator('#save-status').filter({ hasText: /Saved/i }).waitFor({
     state: 'visible',
     timeout: 5_000,
+  });
+}
+
+export async function applyDemoExtensionSettings(
+  page: Page,
+  extensionId: string,
+  pathMapping?: DemoPathMapping,
+): Promise<void> {
+  const demo = process.env.IMMICH_DEMO_ORIGIN ?? 'https://demo.immich.app';
+  const localPath = pathMapping?.localPath ?? '/var/test';
+  const immichPath = pathMapping?.immichPath ?? '/data/upload';
+  await applyExtensionSettingsForSite(page, extensionId, {
+    enabledOrigin: demo,
+    pathMappings: [{ localPath, immichPath }],
   });
 }
 

@@ -1,6 +1,8 @@
 import type { Page } from '@playwright/test';
 import {
   applyDemoExtensionSettings,
+  applyExtensionSettingsForSite,
+  type DemoPathMapping,
   demoOrigin,
   loginDemoImmich,
 } from '../../scripts/demo-e2e-preset.js';
@@ -9,6 +11,9 @@ import { expect, test } from './fixtures';
 const DEMO = demoOrigin();
 const PARTNERS = `${DEMO}/partners/743f389e-ee80-4682-8d56-2cd45f692c40`;
 const PHOTO = `${DEMO}/photos/6418c37d-35b0-4011-882d-36946bc00eb7`;
+/** Sequential in demo viewer (right arrow from first goes to second). */
+const PHOTO_ARROW_A = `${DEMO}/photos/2c5bb067-8541-407d-8d31-2f9ce6f30e2c`;
+const PHOTO_ARROW_B = `${DEMO}/photos/1c27e4ea-29d7-451e-b777-3191930cda3b`;
 
 const EXPECTED_MAPPED_PATH =
   '/var/test/6bbe2767-7851-461a-aa2d-afbd3460aa85/19/eb/19eb57f1-adf2-4f40-abbd-10412d55a70f.jpg';
@@ -32,18 +37,35 @@ async function scrollToFirstJan22Thumbnail(page: Page) {
   return thumb;
 }
 
-async function saveExtensionOptions(page: import('@playwright/test').Page, extensionId: string) {
-  await applyDemoExtensionSettings(page, extensionId);
+async function saveExtensionOptions(
+  page: import('@playwright/test').Page,
+  extensionId: string,
+  pathMapping?: DemoPathMapping,
+) {
+  await applyDemoExtensionSettings(page, extensionId, pathMapping);
+  await page.close();
+}
+
+/** Multi-row mappings + explicit origin (demo URLs; no `.env` credentials). */
+async function saveExtensionOptionsForSite(
+  page: import('@playwright/test').Page,
+  extensionId: string,
+  pathMappings: DemoPathMapping[],
+) {
+  await applyExtensionSettingsForSite(page, extensionId, {
+    enabledOrigin: DEMO,
+    pathMappings,
+  });
   await page.close();
 }
 
 /** Immich persists detail open/closed (`asset-viewer-state`); `i` toggles — ensure open for assertions. */
 async function ensureAssetViewerDetailPanelOpen(page: Page) {
   const panel = page.locator('#detail-panel');
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 8; i++) {
     if (await panel.isVisible().catch(() => false)) return;
     await page.keyboard.press('i');
-    await page.waitForTimeout(150);
+    await page.waitForTimeout(250);
   }
 }
 
@@ -107,6 +129,50 @@ test.describe('Immich demo (extension loaded)', () => {
     await expect(appPage.locator('#detail-panel')).toBeVisible();
 
     await expect(appPage.getByText(EXPECTED_MAPPED_PATH)).toBeVisible();
+  });
+
+  test('photo view: mapped path updates on next photo (local roots without leading slash)', async ({
+    context,
+    extensionId,
+  }) => {
+    const page = await context.newPage();
+    // Regression: `A` / `B` (not `/A`) — mapped text has no leading slash; extension must keep finding the folder link.
+    await saveExtensionOptionsForSite(page, extensionId, [
+      { localPath: 'A', immichPath: '/data/upload/library' },
+      { localPath: 'B', immichPath: '/data/upload' },
+    ]);
+
+    const appPage = await context.newPage();
+    await loginDemoImmich(appPage);
+
+    await appPage.goto(PHOTO_ARROW_A, { waitUntil: 'load', timeout: 30_000 });
+    await appPage.locator('[data-testid="asset-viewer-navbar-actions"]').waitFor({
+      state: 'visible',
+      timeout: 30_000,
+    });
+    await ensureAssetViewerDetailPanelOpen(appPage);
+    await expect(appPage.locator('#detail-panel')).toBeVisible();
+
+    const pathLink = appPage.locator('#detail-panel a[href*="/folders"]').first();
+    await expect(pathLink).toBeVisible({ timeout: 15_000 });
+    await expect(pathLink).toHaveText(/^(A|B)\/.+/, { timeout: 20_000 });
+    const pathBefore = (await pathLink.textContent())?.trim() ?? '';
+
+    const nextBtn = appPage.locator('#immich-asset-viewer .col-start-4 button[type="button"]').first();
+    await expect(nextBtn).toBeVisible({ timeout: 10_000 });
+    await nextBtn.click();
+    await appPage.waitForURL(
+      (u) => u.pathname.toLowerCase() === new URL(PHOTO_ARROW_B).pathname.toLowerCase(),
+      { timeout: 15_000 },
+    );
+
+    await expect
+      .poll(async () => (await pathLink.textContent())?.trim() ?? '', {
+        timeout: 15_000,
+        intervals: [100, 200, 400, 600, 800],
+      })
+      .not.toBe(pathBefore);
+    await expect(pathLink).toHaveText(/^(A|B)\/.+/);
   });
 
   test('info panel: file path stays hidden after user toggles it off', async ({ context, extensionId }) => {

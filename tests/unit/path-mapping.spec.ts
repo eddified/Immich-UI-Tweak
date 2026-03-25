@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyPathMappings,
   filterCompleteMappings,
+  folderLinkTextLooksLikePathDisplay,
   sortMappingsForReplace,
 } from '../../src/shared/path-mapping';
 import type { PathMappingRow } from '../../src/shared/storage-types';
@@ -44,5 +45,26 @@ describe('applyPathMappings', () => {
     const rows: PathMappingRow[] = [{ localPath: '/var/test', immichPath: '/data/upload' }];
     const once = applyPathMappings('/data/upload/a.jpg', rows);
     expect(applyPathMappings(once, rows)).toBe(once);
+  });
+});
+
+describe('folderLinkTextLooksLikePathDisplay', () => {
+  const dockerStyle: PathMappingRow[] = [
+    { localPath: 'A', immichPath: '/usr/src/app/upload/library' },
+    { localPath: 'B', immichPath: '/usr/src/app/upload' },
+  ];
+
+  it('accepts POSIX server paths', () => {
+    expect(folderLinkTextLooksLikePathDisplay('/usr/src/app/upload/x.jpg', dockerStyle)).toBe(true);
+  });
+
+  it('accepts mapped paths with local root and no leading slash', () => {
+    expect(folderLinkTextLooksLikePathDisplay('A/user/uuid/file.jpg', dockerStyle)).toBe(true);
+    expect(folderLinkTextLooksLikePathDisplay('B/user/uuid/file.jpg', dockerStyle)).toBe(true);
+  });
+
+  it('rejects empty and bare URLs', () => {
+    expect(folderLinkTextLooksLikePathDisplay('', dockerStyle)).toBe(false);
+    expect(folderLinkTextLooksLikePathDisplay('https://x/y', dockerStyle)).toBe(false);
   });
 });

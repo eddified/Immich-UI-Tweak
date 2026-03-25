@@ -14,7 +14,12 @@ import {
   parseOriginalPathFromAssetJson,
   parseOwnerIdFromAssetJson,
 } from '../shared/asset-original-path';
-import { applyPathMappings } from '../shared/path-mapping';
+import {
+  applyPathMappings,
+  filterCompleteMappings,
+  folderLinkTextLooksLikePathDisplay,
+  sortMappingsForReplace,
+} from '../shared/path-mapping';
 import {
   DEFAULT_SETTINGS,
   STORAGE_KEYS,
@@ -62,6 +67,8 @@ const userByOwnerId = new Map<string, ImmichUserPublic>();
 const userFetchInflight = new Map<string, Promise<ImmichUserPublic | null>>();
 /** Avoid duplicate GET /api/assets/:id while injecting partner file path. */
 const partnerPathInflight = new Map<string, Promise<void>>();
+/** Fill `assetApiDetailById` when the URL already changed but the fetch hook has not posted yet. */
+const assetDetailFetchInflight = new Map<string, Promise<void>>();
 /** Asset ids where GET /api/assets confirmed the current user is the owner — skip inject (use Immich toggle). */
 const pathInjectionUseNativeOnly = new Set<string>();
 /** Partner `originalPath` waiting for `#detail-panel` filename row to exist (cold loads). */
@@ -161,6 +168,7 @@ function removeExtensionElements(): void {
   userByOwnerId.clear();
   userFetchInflight.clear();
   partnerPathInflight.clear();
+  assetDetailFetchInflight.clear();
   pathInjectionUseNativeOnly.clear();
   pendingPartnerPathByAssetId.clear();
   assetApiDetailById.clear();
@@ -496,6 +504,48 @@ function fetchAssetViaMainWorld(
   });
 }
 
+function linkTextLooksLikeImmichServerPath(text: string, mappings: PathMappingRow[]): boolean {
+  const sorted = sortMappingsForReplace(mappings);
+  if (sorted.length === 0) return true;
+  const t = text.trim();
+  if (!t) return false;
+  for (const { immichPath } of sorted) {
+    const imm = immichPath.trim();
+    if (imm && t.startsWith(imm)) return true;
+  }
+  return false;
+}
+
+function scheduleAssetDetailFetchIfMissing(assetId: string): void {
+  const key = assetId.toLowerCase();
+  const row = assetApiDetailById.get(key);
+  if (typeof row?.originalPath === 'string' && row.originalPath.trim()) return;
+  if (assetDetailFetchInflight.has(key)) return;
+  const inflight = (async () => {
+    try {
+      const fromMain = await fetchAssetViaMainWorld(assetId);
+      if (fromMain) {
+        assetApiDetailById.set(key, { ownerId: fromMain.ownerId, originalPath: fromMain.originalPath });
+        return;
+      }
+      const assetUrl = new URL(`/api/assets/${encodeURIComponent(assetId)}`, location.origin);
+      appendSharedLinkSearchParams(assetUrl);
+      const res = await fetch(assetUrl.href, { credentials: 'include' });
+      if (!res.ok) return;
+      const json: unknown = await res.json();
+      const ownerId = parseOwnerIdFromAssetJson(json);
+      const originalPath = parseOriginalPathFromAssetJson(json);
+      if (ownerId && originalPath) {
+        assetApiDetailById.set(key, { ownerId, originalPath });
+      }
+    } finally {
+      assetDetailFetchInflight.delete(key);
+    }
+  })();
+  assetDetailFetchInflight.set(key, inflight);
+  void inflight.then(() => scheduleDomUpdate());
+}
+
 /** GET /api/users/me in the page main world — isolated `fetch` often returns 401 without session cookies. */
 function fetchMeViaMainWorld(): Promise<string | null> {
   return new Promise((resolve) => {
@@ -589,7 +639,7 @@ function insertPartnerPathRowAfterFilename(
  */
 function schedulePartnerPathInjection(panel: HTMLElement, assetId: string): void {
   if (userDismissedPathThisAsset) return;
-  if (findFolderPathLink(panel)) return;
+  if (findFolderPathLink(panel, settings.pathMappings)) return;
   if (pathInjectionUseNativeOnly.has(assetId)) return;
 
   const esc = escapeForCssAttr(assetId);
@@ -658,7 +708,7 @@ function schedulePartnerPathInjection(panel: HTMLElement, assetId: string): void
 
         const pnl = document.getElementById('detail-panel');
         if (!pnl?.isConnected) return;
-        if (findFolderPathLink(pnl)) return;
+        if (findFolderPathLink(pnl, settings.pathMappings)) return;
 
         const escInner = escapeForCssAttr(assetId);
         if (!insertPartnerPathRowAfterFilename(pnl, assetId, rawPath, escInner)) {
@@ -675,12 +725,12 @@ function schedulePartnerPathInjection(panel: HTMLElement, assetId: string): void
 }
 
 /** Immich-native path row only — ignore our injected row (same folder-link shape). */
-function findFolderPathLink(panel: HTMLElement): HTMLAnchorElement | null {
+function findFolderPathLink(panel: HTMLElement, pathMappings: PathMappingRow[]): HTMLAnchorElement | null {
   const links = panel.querySelectorAll<HTMLAnchorElement>('a[href*="/folders"]');
   for (const a of links) {
     if (a.closest('[data-immich-ui-helper-injected-path]')) continue;
     const t = a.textContent?.trim() ?? '';
-    if (t.startsWith('/') || t.includes(':\\')) {
+    if (folderLinkTextLooksLikePathDisplay(t, pathMappings)) {
       return a;
     }
   }
@@ -689,7 +739,7 @@ function findFolderPathLink(panel: HTMLElement): HTMLAnchorElement | null {
 
 /** @returns true if a toggle button was clicked */
 function clickShowFileLocationIfNeeded(panel: HTMLElement): boolean {
-  if (findFolderPathLink(panel)) return false;
+  if (findFolderPathLink(panel, settings.pathMappings)) return false;
 
   for (const label of SHOW_FILE_LOCATION_LABELS) {
     const btn = panel.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
@@ -727,16 +777,44 @@ function expandAndRewriteFilePath(): void {
 
   resetFileLocationTrackingIfAssetChanged();
 
-  const link = findFolderPathLink(panel);
+  const link = findFolderPathLink(panel, settings.pathMappings);
   if (link) {
     removeInjectedPartnerPath(panel);
     userDismissedPathThisAsset = false;
     sawPathLinkThisAsset = true;
-    const raw = link.textContent?.trim() ?? '';
-    if (!raw) return;
+    const aid = parseAssetIdFromHref()?.toLowerCase();
+    const apiRow = aid ? assetApiDetailById.get(aid) : undefined;
+    const canonicalFromApi =
+      typeof apiRow?.originalPath === 'string' && apiRow.originalPath.trim()
+        ? apiRow.originalPath.trim()
+        : '';
+
+    if (aid && !canonicalFromApi && filterCompleteMappings(settings.pathMappings).length > 0) {
+      scheduleAssetDetailFetchIfMissing(aid);
+    }
+
+    const linkText = link.textContent?.trim() ?? '';
+    let raw = canonicalFromApi;
+    if (!raw) {
+      if (!linkTextLooksLikeImmichServerPath(linkText, settings.pathMappings)) {
+        return;
+      }
+      raw = linkText;
+    }
+
     const next = applyPathMappings(raw, settings.pathMappings);
-    if (next !== raw) {
+    if (link.textContent?.trim() !== next) {
       link.textContent = next;
+    }
+    const wantHref = folderPageHref(raw);
+    try {
+      const cur = new URL(link.href).href;
+      const want = new URL(wantHref, location.origin).href;
+      if (cur !== want) {
+        link.setAttribute('href', wantHref);
+      }
+    } catch {
+      link.setAttribute('href', wantHref);
     }
     return;
   }
