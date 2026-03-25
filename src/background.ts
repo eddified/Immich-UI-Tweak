@@ -87,6 +87,12 @@ chrome.runtime.onStartup.addListener(() => {
   void syncRegisteredContentScripts();
 });
 
+chrome.action.onClicked.addListener(() => {
+  void chrome.runtime.openOptionsPage().catch(() => {
+    /* ignore */
+  });
+});
+
 void syncRegisteredContentScripts();
 
 chrome.storage.onChanged.addListener((changes, area) => {
