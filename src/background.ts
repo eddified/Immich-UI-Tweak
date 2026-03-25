@@ -1,36 +1,81 @@
 import { parseCurrentUserIdFromMeJson } from './shared/immich-user';
 import { parseOriginalPathFromAssetJson, parseOwnerIdFromAssetJson } from './shared/asset-original-path';
+import { DEFAULT_SETTINGS, STORAGE_KEYS } from './shared/storage-types';
+import { enabledUrlsToMatchPatterns } from './shared/url-match';
 
+const CONTENT_SCRIPT_ID = 'immich-ui-helper-content';
 const INJECTED_MAIN_CS_ID = 'immich-ui-helper-injected-main';
 
+function loadEnabledUrlsFromSync(): Promise<string[]> {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get([STORAGE_KEYS.enabledUrls], (sync) => {
+      const enabledUrls = Array.isArray(sync[STORAGE_KEYS.enabledUrls])
+        ? (sync[STORAGE_KEYS.enabledUrls] as string[])
+        : DEFAULT_SETTINGS.enabledUrls;
+      resolve(enabledUrls);
+    });
+  });
+}
+
 /**
- * Register `injected.js` in the page's main world at `document_start` so `fetch` is patched
- * before Immich's first API call. Message-based `executeScript` from the isolated content script
- * can run too late on cold loads (race with getAssetInfo).
+ * Register isolated `content.js` + main-world `injected.js` only for configured Immich URLs
+ * (same scope as `isUrlEnabled`), instead of every http(s) page.
  */
-async function registerMainWorldInjected(): Promise<void> {
+async function syncRegisteredContentScripts(): Promise<void> {
+  const enabledUrls = await loadEnabledUrlsFromSync();
+  const matches = enabledUrlsToMatchPatterns(enabledUrls);
+
   try {
-    await chrome.scripting.unregisterContentScripts({ ids: [INJECTED_MAIN_CS_ID] });
+    await chrome.scripting.unregisterContentScripts({
+      ids: [CONTENT_SCRIPT_ID, INJECTED_MAIN_CS_ID],
+    });
   } catch {
     /* not registered */
   }
+
+  if (matches.length === 0) {
+    return;
+  }
+
   try {
     await chrome.scripting.registerContentScripts([
       {
+        id: CONTENT_SCRIPT_ID,
+        matches,
+        js: ['content.js'],
+        css: ['content.css'],
+        runAt: 'document_start',
+        allFrames: false,
+      },
+      {
         id: INJECTED_MAIN_CS_ID,
-        matches: ['http://*/*', 'https://*/*'],
+        matches,
         js: ['injected.js'],
         runAt: 'document_start',
         world: 'MAIN',
       },
     ]);
   } catch {
-    /* Older Chromium without `world` on registerContentScripts — content script fallback only */
+    /* Older Chromium without `world` on registerContentScripts — isolated + message fallback */
+    try {
+      await chrome.scripting.registerContentScripts([
+        {
+          id: CONTENT_SCRIPT_ID,
+          matches,
+          js: ['content.js'],
+          css: ['content.css'],
+          runAt: 'document_start',
+          allFrames: false,
+        },
+      ]);
+    } catch {
+      /* ignore */
+    }
   }
 }
 
 chrome.runtime.onInstalled.addListener((details) => {
-  void registerMainWorldInjected();
+  void syncRegisteredContentScripts();
   if (details.reason === 'install') {
     chrome.runtime.openOptionsPage().catch(() => {
       /* ignore */
@@ -39,10 +84,17 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  void registerMainWorldInjected();
+  void syncRegisteredContentScripts();
 });
 
-void registerMainWorldInjected();
+void syncRegisteredContentScripts();
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'sync') return;
+  if (changes[STORAGE_KEYS.enabledUrls]) {
+    void syncRegisteredContentScripts();
+  }
+});
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === 'immich-ui-helper:fetch-me-main') {
@@ -143,7 +195,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       world: 'MAIN',
     })
     .then(() => sendResponse({ ok: true }))
-    .catch((err: Error) => sendResponse({ ok: false, error: String(err.message) }));
+    .catch(() => sendResponse({ ok: false }));
 
   return true;
 });

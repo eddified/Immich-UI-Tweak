@@ -1,5 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { isUrlEnabled, normalizeInstanceUrl } from '../../src/shared/url-match';
+import {
+  enabledUrlsToMatchPatterns,
+  isUrlEnabled,
+  normalizeInstanceUrl,
+} from '../../src/shared/url-match';
+
+describe('enabledUrlsToMatchPatterns', () => {
+  it('returns host wildcard patterns for origin-only entries', () => {
+    expect(enabledUrlsToMatchPatterns(['https://demo.immich.app'])).toEqual([
+      'https://demo.immich.app/*',
+    ]);
+  });
+
+  it('returns path-scoped patterns without bare path-extend wildcard', () => {
+    const p = enabledUrlsToMatchPatterns(['https://demo.immich.app/team']);
+    expect(p).toContain('https://demo.immich.app/team');
+    expect(p).toContain('https://demo.immich.app/team/');
+    expect(p).toContain('https://demo.immich.app/team/*');
+    expect(p.some((x) => x.includes('team*'))).toBe(false);
+  });
+
+  it('skips invalid and non-http(s) URLs', () => {
+    expect(enabledUrlsToMatchPatterns(['not-a-url', 'ftp://x.com/'])).toEqual([]);
+  });
+});
 
 describe('normalizeInstanceUrl', () => {
   it('trims and drops trailing slash on path', () => {

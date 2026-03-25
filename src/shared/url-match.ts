@@ -1,3 +1,5 @@
+import { MAX_ENABLED_URLS } from './storage-types';
+
 /** Normalize for stable storage and display (trim, drop trailing slash except root). */
 export function normalizeInstanceUrl(url: string): string {
   const t = url.trim();
@@ -66,4 +68,44 @@ export function isUrlEnabled(href: string, enabledPrefixes: string[]): boolean {
   }
 
   return false;
+}
+
+/**
+ * Chrome `registerContentScripts` match patterns for the user's Immich instances.
+ * Kept in sync with {@link isUrlEnabled} (origin + path segment prefix, no `/a` → `/ab` bleed).
+ */
+export function enabledUrlsToMatchPatterns(enabledUrls: string[]): string[] {
+  const out = new Set<string>();
+  for (const raw of enabledUrls.slice(0, MAX_ENABLED_URLS)) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+
+    let u: URL;
+    try {
+      u = new URL(trimmed);
+    } catch {
+      continue;
+    }
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+      continue;
+    }
+
+    const scheme = u.protocol === 'https:' ? 'https' : 'http';
+    const hostPort = u.host;
+    const pathname = u.pathname || '/';
+    const path =
+      pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+
+    const origin = `${scheme}://${hostPort}`;
+
+    if (path === '' || path === '/') {
+      out.add(`${origin}/*`);
+      continue;
+    }
+
+    out.add(`${origin}${path}`);
+    out.add(`${origin}${path}/`);
+    out.add(`${origin}${path}/*`);
+  }
+  return [...out];
 }

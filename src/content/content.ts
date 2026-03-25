@@ -114,7 +114,10 @@ function requestMainWorldInject(): void {
   });
 }
 
-/** Early hook so Immich fetches after SPA boot are intercepted (storage/URL checks stay async). */
+/**
+ * Main-world `injected.js` is registered at `document_start` only on allowlisted URLs.
+ * This message remains a fallback when `registerContentScripts` cannot use `world: 'MAIN'`.
+ */
 requestMainWorldInject();
 
 function scheduleDomUpdate(): void {
