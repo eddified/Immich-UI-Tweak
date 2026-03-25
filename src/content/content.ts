@@ -27,6 +27,7 @@ import {
   type PathMappingRow,
 } from '../shared/storage-types';
 import { isUrlEnabled } from '../shared/url-match';
+import { applyFoldersPathRelabel } from './folders-path-relabel';
 
 const MSG_SOURCE = 'immich-ui-helper';
 const MSG_TYPE = 'ownerPairs';
@@ -141,6 +142,7 @@ function scheduleDomUpdate(): void {
     updateThumbnailOverlays();
     updateViewerOverlay();
     expandAndRewriteFilePath();
+    applyFoldersPathRelabel(settings);
   });
 }
 
