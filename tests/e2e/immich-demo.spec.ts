@@ -76,6 +76,15 @@ function showFileLocationButton(page: Page) {
   });
 }
 
+/** `href` must still carry Immich server paths in `path=` (never mapped local roots). */
+function expectFoldersHrefUsesServerPath(href: string | null, baseOrigin: string): void {
+  expect(href).toBeTruthy();
+  const u = new URL(href!, baseOrigin);
+  const p = u.searchParams.get('path');
+  expect(p).toBeTruthy();
+  expect(p!.startsWith('/data')).toBe(true);
+}
+
 test.describe('Immich demo (extension loaded)', () => {
   test('partner timeline: uploader overlay on Jan 22 first thumbnail', async ({
     context,
@@ -173,6 +182,38 @@ test.describe('Immich demo (extension loaded)', () => {
       })
       .not.toBe(pathBefore);
     await expect(pathLink).toHaveText(/^(A|B)\/.+/);
+  });
+
+  /** Smoke: extension relabels visible text only; `path=` must stay the Immich server path. Uses `demoOrigin()` / default demo credentials — not `MY_IMMICH_*` from `.env`. */
+  test('folders page: breadcrumb or tree link href keeps server path in query', async ({
+    context,
+    extensionId,
+  }) => {
+    const page = await context.newPage();
+    await saveExtensionOptions(page, extensionId);
+
+    const appPage = await context.newPage();
+    await loginDemoImmich(appPage);
+
+    const folderUrl = `${DEMO}/folders?path=${encodeURIComponent('/data/upload')}`;
+    await appPage.goto(folderUrl, { waitUntil: 'load', timeout: 30_000 });
+
+    await appPage.locator('nav.flex.items-center.py-2').waitFor({ state: 'visible', timeout: 30_000 });
+
+    const breadcrumbLinks = appPage.locator(
+      'nav.flex.items-center.py-2 ol.flex a[href*="/folders"][href*="path="]',
+    );
+    const treeLinks = appPage.locator('ul.list-none.ms-2 a[href*="/folders"][href*="path="]');
+
+    const link =
+      (await breadcrumbLinks.count()) > 0 ? breadcrumbLinks.first() : treeLinks.first();
+    await expect(link).toBeVisible({ timeout: 15_000 });
+
+    await expect
+      .poll(async () => link.getAttribute('href'), { timeout: 10_000 })
+      .toBeTruthy();
+
+    expectFoldersHrefUsesServerPath(await link.getAttribute('href'), DEMO);
   });
 
   test('info panel: file path stays hidden after user toggles it off', async ({ context, extensionId }) => {
