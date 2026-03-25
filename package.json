@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "icons:render": "node scripts/render-extension-icons.mjs",
     "build": "node esbuild.config.mjs && node scripts/copy-static.mjs",
     "dev:browser": "npm run build && tsx scripts/dev-browser.ts",
     "test": "npm run test:unit && npm run test:e2e",
