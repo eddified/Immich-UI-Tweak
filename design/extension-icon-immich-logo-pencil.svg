@@ -2,9 +2,9 @@
 <!--
   Immich logomark: exact paths copied from immich/design/immich-logo.svg (unchanged).
   Pencil: original overlay for Immich UI Helper extension concept only.
+  No background rect — transparent for toolbar / PNG export.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 792 792" width="1024" height="1024">
-  <rect width="792" height="792" fill="#ffffff"/>
   <style type="text/css">
     .st0{fill:#FA2921;}
     .st1{fill:#ED79B5;}

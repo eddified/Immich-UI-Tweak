@@ -3,6 +3,8 @@
  *
  * Inlines the SVG in HTML — Chromium blocks file:// URLs on <img> inside about:blank,
  * which previously produced broken-image placeholders.
+ *
+ * PNGs use alpha (transparent pixels outside the artwork) via omitBackground.
  */
 import { chromium } from 'playwright';
 import { mkdir, readFile } from 'node:fs/promises';
@@ -41,7 +43,7 @@ try {
       deviceScaleFactor: 1,
     });
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/></head>
-<body style="margin:0;padding:0;background:#fff;overflow:hidden;width:${size}px;height:${size}px">
+<body style="margin:0;padding:0;background:transparent;overflow:hidden;width:${size}px;height:${size}px">
 ${svgForSize(size)}
 </body></html>`;
     await page.setContent(html, { waitUntil: 'load' });
@@ -49,6 +51,7 @@ ${svgForSize(size)}
     await page.screenshot({
       path: join(outDir, `icon-${size}.png`),
       type: 'png',
+      omitBackground: true,
       clip: { x: 0, y: 0, width: size, height: size },
     });
     await page.close();
