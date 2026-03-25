@@ -2,6 +2,7 @@ import {
   mappedFolderDisplayLabel,
   parentServerFolderPath,
   parseFoldersPathQuery,
+  pathsUnchangedByMappings,
 } from '../shared/folders-path-label';
 import { filterCompleteMappings } from '../shared/path-mapping';
 import type { ExtensionSettings } from '../shared/storage-types';
@@ -29,6 +30,9 @@ function relabelFolderAnchor(
     return;
   }
   const S_parent = parentServerFolderPath(S);
+  if (pathsUnchangedByMappings(S, S_parent, mappings)) {
+    return;
+  }
   const next = mappedFolderDisplayLabel(S, S_parent, mappings);
   if (textEl.textContent?.trim() !== next) {
     textEl.textContent = next;
@@ -64,9 +68,11 @@ export function applyFoldersPathRelabel(settings: ExtensionSettings): void {
       const S = parseFoldersPathQuery(location.href);
       if (S !== null) {
         const Sp = parentServerFolderPath(S);
-        const next = mappedFolderDisplayLabel(S, Sp, pathMappings);
-        if (currentCrumb.textContent?.trim() !== next) {
-          currentCrumb.textContent = next;
+        if (!pathsUnchangedByMappings(S, Sp, pathMappings)) {
+          const next = mappedFolderDisplayLabel(S, Sp, pathMappings);
+          if (currentCrumb.textContent?.trim() !== next) {
+            currentCrumb.textContent = next;
+          }
         }
       }
     }

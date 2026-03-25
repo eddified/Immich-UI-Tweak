@@ -1,4 +1,4 @@
-import { applyPathMappings } from './path-mapping';
+import { applyPathMappings, filterCompleteMappings } from './path-mapping';
 import type { PathMappingRow } from './storage-types';
 
 /**
@@ -53,6 +53,26 @@ export function lastServerPathSegment(path: string): string {
 
 function normalizeSeparators(s: string): string {
   return s.replace(/\\/g, '/');
+}
+
+/**
+ * True when no mapping row applies to `S` or `S_parent` (both stay the same after {@link applyPathMappings}).
+ * In that case we must not overwrite Immich text: labels can be **collapsed** multi-segment `node.value`
+ * strings, while our derived label uses single-segment parents and would truncate visible path info.
+ */
+export function pathsUnchangedByMappings(
+  S: string,
+  S_parent: string,
+  mappings: PathMappingRow[],
+): boolean {
+  if (filterCompleteMappings(mappings).length === 0) {
+    return true;
+  }
+  const s = normalizeSeparators(S.trim());
+  const sp = normalizeSeparators(S_parent.trim());
+  const m = normalizeSeparators(applyPathMappings(S.trim(), mappings));
+  const mp = normalizeSeparators(applyPathMappings(S_parent.trim(), mappings));
+  return m === s && mp === sp;
 }
 
 /**

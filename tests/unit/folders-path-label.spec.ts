@@ -5,6 +5,7 @@ import {
   mappedFolderDisplayLabel,
   parentServerFolderPath,
   parseFoldersPathQuery,
+  pathsUnchangedByMappings,
 } from '../../src/shared/folders-path-label';
 
 describe('parseFoldersPathQuery', () => {
@@ -46,6 +47,22 @@ describe('parentServerFolderPath', () => {
 describe('lastServerPathSegment', () => {
   it('returns last segment', () => {
     expect(lastServerPathSegment('/data/upload')).toBe('upload');
+  });
+});
+
+describe('pathsUnchangedByMappings', () => {
+  it('is true when mappings list is empty', () => {
+    expect(pathsUnchangedByMappings('/data/a', '/data', [])).toBe(true);
+  });
+
+  it('is true when no row prefix-matches either path', () => {
+    const rows: PathMappingRow[] = [{ localPath: '/x', immichPath: '/only/this' }];
+    expect(pathsUnchangedByMappings('/data/upload', '/data', rows)).toBe(true);
+  });
+
+  it('is false when either path is transformed', () => {
+    const rows: PathMappingRow[] = [{ localPath: '/var', immichPath: '/data' }];
+    expect(pathsUnchangedByMappings('/data/upload', '/data', rows)).toBe(false);
   });
 });
 
