@@ -18,6 +18,8 @@ import {
   applyPathMappings,
   filterCompleteMappings,
   folderLinkTextLooksLikePathDisplay,
+  normalizePathMappingRow,
+  pathPrefixMatches,
   sortMappingsForReplace,
 } from '../shared/path-mapping';
 import {
@@ -93,9 +95,10 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
       const enabledUrls = Array.isArray(sync[STORAGE_KEYS.enabledUrls])
         ? (sync[STORAGE_KEYS.enabledUrls] as string[])
         : DEFAULT_SETTINGS.enabledUrls;
-      const pathMappings = Array.isArray(sync[STORAGE_KEYS.pathMappings])
+      const pathMappings = (Array.isArray(sync[STORAGE_KEYS.pathMappings])
         ? (sync[STORAGE_KEYS.pathMappings] as PathMappingRow[])
-        : DEFAULT_SETTINGS.pathMappings;
+        : DEFAULT_SETTINGS.pathMappings
+      ).map(normalizePathMappingRow);
       const showPartnerIcons =
         typeof sync[STORAGE_KEYS.showPartnerIcons] === 'boolean'
           ? (sync[STORAGE_KEYS.showPartnerIcons] as boolean)
@@ -519,8 +522,7 @@ function linkTextLooksLikeImmichServerPath(text: string, mappings: PathMappingRo
   const t = text.trim();
   if (!t) return false;
   for (const { immichPath } of sorted) {
-    const imm = immichPath.trim();
-    if (imm && t.startsWith(imm)) return true;
+    if (immichPath && pathPrefixMatches(t, immichPath)) return true;
   }
   return false;
 }

@@ -18,6 +18,10 @@ const PHOTO_ARROW_B = `${DEMO}/photos/1c27e4ea-29d7-451e-b777-3191930cda3b`;
 const EXPECTED_MAPPED_PATH =
   '/var/test/6bbe2767-7851-461a-aa2d-afbd3460aa85/19/eb/19eb57f1-adf2-4f40-abbd-10412d55a70f.jpg';
 
+/** Demo folders deep path (library + nested segments). */
+const FOLDERS_DEEP_SERVER_PATH =
+  '/data/upload/6bbe2767-7851-461a-aa2d-afbd3460aa85/00/00';
+
 /**
  * Partner / virtual timeline: scroll until the first Jan 22 thumbnail is mounted.
  * Immich puts `data-asset` and `role="link"` on the same node; accessible name comes from image/alt text.
@@ -198,12 +202,12 @@ test.describe('Immich demo (extension loaded)', () => {
     const folderUrl = `${DEMO}/folders?path=${encodeURIComponent('/data/upload')}`;
     await appPage.goto(folderUrl, { waitUntil: 'load', timeout: 30_000 });
 
-    await appPage.locator('nav.flex.items-center.py-2').waitFor({ state: 'visible', timeout: 30_000 });
+    await appPage.locator('main nav.flex.items-center.py-2').waitFor({ state: 'visible', timeout: 30_000 });
 
     const breadcrumbLinks = appPage.locator(
-      'nav.flex.items-center.py-2 ol.flex a[href*="/folders"][href*="path="]',
+      'main nav.flex.items-center.py-2 ol.flex a[href*="/folders"][href*="path="]',
     );
-    const treeLinks = appPage.locator('ul.list-none.ms-2 a[href*="/folders"][href*="path="]');
+    const treeLinks = appPage.locator('#sidebar ul.list-none.ms-2 a[href*="/folders"][href*="path="]');
 
     const link =
       (await breadcrumbLinks.count()) > 0 ? breadcrumbLinks.first() : treeLinks.first();
@@ -242,6 +246,96 @@ test.describe('Immich demo (extension loaded)', () => {
         intervals: [100, 200, 400, 600, 800],
       })
       .toBe('/z');
+  });
+
+  test('folders deep path: breadcrumb and sidebar show /z for /data/upload segment', async ({
+    context,
+    extensionId,
+  }) => {
+    const page = await context.newPage();
+    await saveExtensionOptionsForSite(page, extensionId, [
+      { localPath: '/z', immichPath: '/data/upload' },
+    ]);
+
+    const appPage = await context.newPage();
+    await loginDemoImmich(appPage);
+
+    const folderUrl = `${DEMO}/folders?path=${encodeURIComponent(FOLDERS_DEEP_SERVER_PATH)}`;
+    await appPage.goto(folderUrl, { waitUntil: 'load', timeout: 30_000 });
+    await appPage.locator('main nav.flex.items-center.py-2').waitFor({ state: 'visible', timeout: 30_000 });
+
+    expect(new URL(appPage.url()).searchParams.get('path')).toBe(FOLDERS_DEEP_SERVER_PATH);
+
+    /** Immich collapses `/data/upload` with the next segment — no `path=/data/upload` crumb. */
+    const immichLibraryRoot = '/data/upload';
+
+    const breadcrumbAnchors = appPage.locator(
+      'main nav.flex.items-center.py-2 ol.flex a[href*="/folders"][href*="path="]',
+    );
+    const currentCrumb = appPage.locator(
+      'main nav.flex.items-center.py-2 ol.flex li p.cursor-default.whitespace-pre-wrap',
+    );
+
+    const nbc = await breadcrumbAnchors.count();
+    let shallowBreadcrumbPath: string | null = null;
+    for (let i = 0; i < nbc; i++) {
+      const h = await breadcrumbAnchors.nth(i).getAttribute('href');
+      if (!h) continue;
+      const p = new URL(h, DEMO).searchParams.get('path');
+      if (!p || !(p === immichLibraryRoot || p.startsWith(`${immichLibraryRoot}/`))) continue;
+      if (shallowBreadcrumbPath === null || p.length < shallowBreadcrumbPath.length) {
+        shallowBreadcrumbPath = p;
+      }
+    }
+    expect(shallowBreadcrumbPath).not.toBeNull();
+
+    await expect
+      .poll(async () => {
+        for (let i = 0; i < nbc; i++) {
+          const h = await breadcrumbAnchors.nth(i).getAttribute('href');
+          if (!h) continue;
+          const p = new URL(h, DEMO).searchParams.get('path');
+          if (p === shallowBreadcrumbPath) return (await breadcrumbAnchors.nth(i).textContent())?.trim() ?? '';
+        }
+        return '';
+      }, { timeout: 25_000, intervals: [100, 200, 400, 600, 800] })
+      .toMatch(/^\/z(\/|$)/);
+
+    await expect
+      .poll(async () => (await currentCrumb.textContent())?.trim() ?? '', {
+        timeout: 20_000,
+        intervals: [100, 200, 400, 600, 800],
+      })
+      .toBe('00');
+
+    const treeAnchors = appPage.locator('#sidebar ul.list-none.ms-2 a[href*="/folders"][href*="path="]');
+    const ntr = await treeAnchors.count();
+    let shallowTreePath: string | null = null;
+    for (let i = 0; i < ntr; i++) {
+      const h = await treeAnchors.nth(i).getAttribute('href');
+      if (!h) continue;
+      const p = new URL(h, DEMO).searchParams.get('path');
+      if (!p || !(p === immichLibraryRoot || p.startsWith(`${immichLibraryRoot}/`))) continue;
+      if (shallowTreePath === null || p.length < shallowTreePath.length) {
+        shallowTreePath = p;
+      }
+    }
+    expect(shallowTreePath).not.toBeNull();
+
+    await expect
+      .poll(async () => {
+        for (let i = 0; i < ntr; i++) {
+          const h = await treeAnchors.nth(i).getAttribute('href');
+          if (!h) continue;
+          const p = new URL(h, DEMO).searchParams.get('path');
+          if (p === shallowTreePath) {
+            const span = treeAnchors.nth(i).locator('span.font-mono.whitespace-pre-wrap');
+            return (await span.textContent())?.trim() ?? '';
+          }
+        }
+        return '';
+      }, { timeout: 25_000, intervals: [100, 200, 400, 600, 800] })
+      .toMatch(/^\/z(\/|$)/);
   });
 
   test('info panel: file path stays hidden after user toggles it off', async ({ context, extensionId }) => {

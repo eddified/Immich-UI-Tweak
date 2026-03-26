@@ -61,15 +61,14 @@ function normalizeSeparators(s: string): string {
  * strings, while our derived label uses single-segment parents and would truncate visible path info.
  */
 /**
- * Deepest Immich server path taken from breadcrumb `path=` links that is a strict prefix of `S`
- * (same boundary rules as explorer parents). If there are no such links (only root icon + current
- * segment), returns `''`. Do **not** use POSIX dirname here: e.g. `/data/upload` would yield `/data`
- * even when the UI shows no parent crumb, which breaks mapped labels and falls back to `upload`.
+ * Deepest path among known explorer `path=` targets (breadcrumb and/or sidebar) that is a strict
+ * prefix of `S`. If none, returns `''`. Do **not** use POSIX dirname: e.g. `/data/upload` with no
+ * `/data` crumb would wrongly use `/data` as parent and break mapping to `/z`.
  */
-export function deepestBreadcrumbParentPrefix(S: string, parentPathsFromLinks: string[]): string {
+export function deepestBreadcrumbParentPrefix(S: string, candidateParentPaths: string[]): string {
   let best = '';
   const s = pathKey(S);
-  for (const raw of parentPathsFromLinks) {
+  for (const raw of candidateParentPaths) {
     const pk = pathKey(raw);
     if (!pk || pk === s) continue;
     if (s.startsWith(`${pk}/`) || (pk === '/' && s !== '/')) {

@@ -1,4 +1,4 @@
-import { filterCompleteMappings } from '../shared/path-mapping';
+import { filterCompleteMappings, normalizePathMappingRow } from '../shared/path-mapping';
 import {
   DEFAULT_SETTINGS,
   MAX_ENABLED_URLS,
@@ -113,9 +113,10 @@ function load(): void {
         enabledUrls: Array.isArray(sync[STORAGE_KEYS.enabledUrls])
           ? (sync[STORAGE_KEYS.enabledUrls] as string[])
           : DEFAULT_SETTINGS.enabledUrls,
-        pathMappings: Array.isArray(sync[STORAGE_KEYS.pathMappings])
+        pathMappings: (Array.isArray(sync[STORAGE_KEYS.pathMappings])
           ? (sync[STORAGE_KEYS.pathMappings] as PathMappingRow[])
-          : DEFAULT_SETTINGS.pathMappings,
+          : DEFAULT_SETTINGS.pathMappings
+        ).map(normalizePathMappingRow),
         showPartnerIcons:
           typeof sync[STORAGE_KEYS.showPartnerIcons] === 'boolean'
             ? (sync[STORAGE_KEYS.showPartnerIcons] as boolean)

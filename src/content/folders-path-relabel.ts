@@ -21,16 +21,24 @@ function isFoldersExplorerRoute(): boolean {
  * Sidebar tree: `tree.svelte` / `tree-items.svelte` — `ul.list-none.ms-2`, label in `span.font-mono`.
  * Does not match `tree-item-thumbnails.svelte` (uses `<button>`, not `a[href]`).
  */
+/**
+ * @param breadcrumbLinkPaths — when set (breadcrumb bar only), parent folder is inferred from other
+ *   `path=` crumbs, not POSIX dirname (dirname breaks `/data/upload` when `/data` is not a crumb).
+ */
 function relabelFolderAnchor(
   anchor: HTMLAnchorElement,
   mappings: ExtensionSettings['pathMappings'],
   textEl: HTMLElement,
+  breadcrumbLinkPaths: string[] | null,
 ): void {
   const S = parseFoldersPathQuery(anchor.href);
   if (S === null) {
     return;
   }
-  const S_parent = parentServerFolderPath(S);
+  const S_parent =
+    breadcrumbLinkPaths !== null
+      ? deepestBreadcrumbParentPrefix(S, breadcrumbLinkPaths)
+      : parentServerFolderPath(S);
   if (pathsUnchangedByMappings(S, S_parent, mappings)) {
     return;
   }
@@ -67,7 +75,11 @@ export function applyFoldersPathRelabel(settings: ExtensionSettings): void {
     )) {
       const q = parseFoldersPathQuery(a.href);
       if (q !== null) pathParamsFromBreadcrumbLinks.push(q);
-      relabelFolderAnchor(a, pathMappings, a);
+    }
+    for (const a of breadcrumbNav.querySelectorAll<HTMLAnchorElement>(
+      'ol.flex a[href*="/folders"][href*="path="]',
+    )) {
+      relabelFolderAnchor(a, pathMappings, a, pathParamsFromBreadcrumbLinks);
     }
 
     const currentCrumb = currentCrumbProbe;
@@ -85,13 +97,22 @@ export function applyFoldersPathRelabel(settings: ExtensionSettings): void {
     }
   }
 
+  const treePathParams: string[] = [];
+  const treeAnchors = document.querySelectorAll<HTMLAnchorElement>(
+    '#sidebar ul.list-none.ms-2 a[href*="/folders"][href*="path="]',
+  );
+  for (const ta of treeAnchors) {
+    const q = parseFoldersPathQuery(ta.href);
+    if (q !== null) treePathParams.push(q);
+  }
+
   for (const span of document.querySelectorAll<HTMLSpanElement>(
-    'ul.list-none.ms-2 a[href*="/folders"] span.font-mono.whitespace-pre-wrap',
+    '#sidebar ul.list-none.ms-2 a[href*="/folders"] span.font-mono.whitespace-pre-wrap',
   )) {
     const a = span.closest('a');
     if (!a?.href) {
       continue;
     }
-    relabelFolderAnchor(a, pathMappings, span);
+    relabelFolderAnchor(a, pathMappings, span, treePathParams);
   }
 }

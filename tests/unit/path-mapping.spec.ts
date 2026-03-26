@@ -3,9 +3,72 @@ import {
   applyPathMappings,
   filterCompleteMappings,
   folderLinkTextLooksLikePathDisplay,
+  normalizeMappingPathSide,
+  pathPrefixMatches,
   sortMappingsForReplace,
 } from '../../src/shared/path-mapping';
 import type { PathMappingRow } from '../../src/shared/storage-types';
+
+describe('normalizeMappingPathSide', () => {
+  it('trims trailing slashes on the right (POSIX)', () => {
+    expect(normalizeMappingPathSide('/a/b/c/')).toBe('/a/b/c');
+    expect(normalizeMappingPathSide('/a/b/c///')).toBe('/a/b/c');
+    expect(normalizeMappingPathSide('/a/b/c')).toBe('/a/b/c');
+  });
+
+  it('treats trailing slashes as equivalent to no trailing slash', () => {
+    expect(normalizeMappingPathSide('/data/upload/')).toBe('/data/upload');
+  });
+
+  it('preserves root as a single slash', () => {
+    expect(normalizeMappingPathSide('/')).toBe('/');
+    expect(normalizeMappingPathSide('//')).toBe('/');
+  });
+
+  it('trims whitespace and normalizes backslashes before stripping trailing slashes', () => {
+    expect(normalizeMappingPathSide('  C:\\foo\\bar\\  ')).toBe('C:/foo/bar');
+  });
+
+  it('maps empty or whitespace-only to empty', () => {
+    expect(normalizeMappingPathSide('')).toBe('');
+    expect(normalizeMappingPathSide('   ')).toBe('');
+  });
+});
+
+describe('pathPrefixMatches', () => {
+  it('does not treat /a/b as a prefix of /a/bcd.jpg (segment boundary)', () => {
+    expect(pathPrefixMatches('/a/bcd.jpg', '/a/b')).toBe(false);
+  });
+
+  it('does not treat /a/b as a prefix of /a/bd', () => {
+    expect(pathPrefixMatches('/a/bd', '/a/b')).toBe(false);
+  });
+
+  it('matches exact path and children under a directory', () => {
+    expect(pathPrefixMatches('/a/b', '/a/b')).toBe(true);
+    expect(pathPrefixMatches('/a/b/file.jpg', '/a/b')).toBe(true);
+    expect(pathPrefixMatches('/a/b/sub/x', '/a/b')).toBe(true);
+  });
+
+  it('does not match /data/up to /data/upload/... (docker partial dirname)', () => {
+    expect(pathPrefixMatches('/data/upload/1234.jpg', '/data/up')).toBe(false);
+    expect(pathPrefixMatches('/data/upload', '/data/up')).toBe(false);
+  });
+
+  it('matches when immich prefix is stored with trailing slash (normalized)', () => {
+    expect(pathPrefixMatches('/data/upload/x', '/data/upload/')).toBe(true);
+  });
+
+  it('does not match single-letter local roots inside a longer segment (e.g. A vs Ab)', () => {
+    expect(pathPrefixMatches('Ab', 'A')).toBe(false);
+    expect(pathPrefixMatches('A/user/x', 'A')).toBe(true);
+  });
+
+  it('treats / as matching any absolute POSIX path', () => {
+    expect(pathPrefixMatches('/data/x', '/')).toBe(true);
+    expect(pathPrefixMatches('rel/x', '/')).toBe(false);
+  });
+});
 
 describe('filterCompleteMappings', () => {
   it('drops rows with only one side', () => {
@@ -15,6 +78,11 @@ describe('filterCompleteMappings', () => {
       { localPath: '/y', immichPath: '  ' },
     ];
     expect(filterCompleteMappings(rows)).toEqual([{ localPath: '/a', immichPath: '/b' }]);
+  });
+
+  it('normalizes trailing slashes on both sides when filtering', () => {
+    const rows: PathMappingRow[] = [{ localPath: '/local/', immichPath: '/immich///' }];
+    expect(filterCompleteMappings(rows)).toEqual([{ localPath: '/local', immichPath: '/immich' }]);
   });
 });
 
@@ -39,6 +107,11 @@ describe('applyPathMappings', () => {
     ];
     const out = applyPathMappings('/data/upload/foo.jpg', rows);
     expect(out).toBe('/var/test/foo.jpg');
+  });
+
+  it('does not replace when immich path is only a string prefix of a path segment (docker /data/up vs upload)', () => {
+    const rows: PathMappingRow[] = [{ localPath: '/Z', immichPath: '/data/up' }];
+    expect(applyPathMappings('/data/upload/1234.jpg', rows)).toBe('/data/upload/1234.jpg');
   });
 
   it('is idempotent after replace', () => {
