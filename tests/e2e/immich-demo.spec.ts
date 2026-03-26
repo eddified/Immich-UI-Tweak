@@ -11,6 +11,8 @@ import { expect, test } from './fixtures';
 const DEMO = demoOrigin();
 const PARTNERS = `${DEMO}/partners/743f389e-ee80-4682-8d56-2cd45f692c40`;
 const PHOTO = `${DEMO}/photos/6418c37d-35b0-4011-882d-36946bc00eb7`;
+/** Partner Mich asset for cold `/photos/:id` (owner ≠ logged-in demo user); id from partner timeline API. */
+const PARTNER_PHOTO_COLD = `${DEMO}/photos/41908224-87c9-4588-bde1-b89c77f122fd`;
 /** Sequential in demo viewer (right arrow from first goes to second). */
 const PHOTO_ARROW_A = `${DEMO}/photos/2c5bb067-8541-407d-8d31-2f9ce6f30e2c`;
 const PHOTO_ARROW_B = `${DEMO}/photos/1c27e4ea-29d7-451e-b777-3191930cda3b`;
@@ -121,6 +123,32 @@ test.describe('Immich demo (extension loaded)', () => {
       expect(overlayBox.x + overlayBox.width).toBeLessThanOrEqual(thumbBox.x + thumbBox.width + 2);
       expect(overlayBox.y).toBeGreaterThanOrEqual(thumbBox.y - 2);
     }
+  });
+
+  test('cold load: partner photo shows injected file path row', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await saveExtensionOptions(page, extensionId);
+
+    const appPage = await context.newPage();
+    await loginDemoImmich(appPage);
+
+    await appPage.goto(PARTNER_PHOTO_COLD, {
+      waitUntil: 'load',
+      timeout: 60_000,
+    });
+    await appPage.locator('[data-testid="asset-viewer-navbar-actions"]').waitFor({
+      state: 'visible',
+      timeout: 30_000,
+    });
+    await ensureAssetViewerDetailPanelOpen(appPage);
+    await expect(appPage.locator('#detail-panel')).toBeVisible({ timeout: 10_000 });
+
+    const injected = appPage.locator('[data-immich-ui-helper-injected-path]');
+    await expect(injected).toBeVisible({ timeout: 25_000 });
+    const link = injected.locator('a[href*="/folders"]');
+    await expect(link).toBeVisible();
+    const text = await link.textContent();
+    expect(text?.trim().length).toBeGreaterThan(3);
   });
 
   test('photo view: mapped file path visible in info panel', async ({ context, extensionId }) => {

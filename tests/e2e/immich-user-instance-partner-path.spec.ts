@@ -75,7 +75,11 @@ async function ensureAssetViewerDetailPanelOpen(page: import('@playwright/test')
 }
 
 test.describe('User Immich instance (extension + partner path)', () => {
-  test('cold load: partner photo shows injected file path row', async ({ context, extensionId }) => {
+  /**
+   * Placeholder: keeps `.env` login + SSO skip behavior for future partner-path tests here.
+   * Partner cold-load coverage lives in `immich-demo.spec.ts` (`cold load: partner photo shows injected file path row`).
+   */
+  test('placeholder: reaches Immich after password login (or skips on SSO)', async ({ context, extensionId }) => {
     test.skip(!ORIGIN || !EMAIL || !PASSWORD, 'Set MY_IMMICH_URL, MY_USERNAME, MY_PASSWORD in .env');
 
     const opt = await context.newPage();
@@ -91,22 +95,7 @@ test.describe('User Immich instance (extension + partner path)', () => {
       );
     }
 
-    await app.goto(`${ORIGIN}${PARTNER_PHOTO_PATH}`, {
-      waitUntil: 'load',
-      timeout: 60_000,
-    });
-    await app.locator('[data-testid="asset-viewer-navbar-actions"]').waitFor({
-      state: 'visible',
-      timeout: 30_000,
-    });
-    await ensureAssetViewerDetailPanelOpen(app);
-    await expect(app.locator('#detail-panel')).toBeVisible({ timeout: 10_000 });
-
-    const injected = app.locator('[data-immich-ui-helper-injected-path]');
-    await expect(injected).toBeVisible({ timeout: 25_000 });
-    const link = injected.locator('a[href*="/folders"]');
-    await expect(link).toBeVisible();
-    const text = await link.textContent();
-    expect(text?.trim().length).toBeGreaterThan(3);
+    const path = new URL(app.url()).pathname;
+    expect(path === '/' || /^\/photos(\/|$)/.test(path)).toBe(true);
   });
 });
