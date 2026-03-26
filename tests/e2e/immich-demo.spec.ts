@@ -216,6 +216,34 @@ test.describe('Immich demo (extension loaded)', () => {
     expectFoldersHrefUsesServerPath(await link.getAttribute('href'), DEMO);
   });
 
+  test('folders page: current crumb shows /z when /data/upload maps to /z', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await saveExtensionOptionsForSite(page, extensionId, [
+      { localPath: '/z', immichPath: '/data/upload' },
+    ]);
+
+    const appPage = await context.newPage();
+    await loginDemoImmich(appPage);
+
+    const folderUrl = `${DEMO}/folders?path=${encodeURIComponent('/data/upload')}`;
+    await appPage.goto(folderUrl, { waitUntil: 'load', timeout: 30_000 });
+    await appPage.locator('main nav.flex.items-center.py-2').waitFor({ state: 'visible', timeout: 30_000 });
+
+    expect(new URL(appPage.url()).searchParams.get('path'), `got ${appPage.url()}`).toBe('/data/upload');
+
+    const currentCrumb = appPage.locator(
+      'main nav.flex.items-center.py-2 ol.flex li p.cursor-default.whitespace-pre-wrap',
+    );
+    await expect(currentCrumb).toBeVisible({ timeout: 15_000 });
+
+    await expect
+      .poll(async () => (await currentCrumb.textContent())?.trim() ?? '', {
+        timeout: 20_000,
+        intervals: [100, 200, 400, 600, 800],
+      })
+      .toBe('/z');
+  });
+
   test('info panel: file path stays hidden after user toggles it off', async ({ context, extensionId }) => {
     const page = await context.newPage();
     await saveExtensionOptions(page, extensionId);

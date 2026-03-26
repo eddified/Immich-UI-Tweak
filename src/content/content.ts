@@ -143,6 +143,13 @@ function scheduleDomUpdate(): void {
     updateViewerOverlay();
     expandAndRewriteFilePath();
     applyFoldersPathRelabel(settings);
+    /* Svelte can overwrite folder labels after our rAF; re-apply on the next task and after layout. */
+    const snap = settings;
+    if (location.pathname === '/folders' || location.pathname.startsWith('/folders/')) {
+      queueMicrotask(() => applyFoldersPathRelabel(snap));
+      setTimeout(() => applyFoldersPathRelabel(snap), 0);
+      setTimeout(() => applyFoldersPathRelabel(snap), 400);
+    }
   });
 }
 

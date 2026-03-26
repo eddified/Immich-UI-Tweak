@@ -60,6 +60,29 @@ function normalizeSeparators(s: string): string {
  * In that case we must not overwrite Immich text: labels can be **collapsed** multi-segment `node.value`
  * strings, while our derived label uses single-segment parents and would truncate visible path info.
  */
+/**
+ * Deepest Immich server path taken from breadcrumb `path=` links that is a strict prefix of `S`
+ * (same boundary rules as explorer parents). If there are no such links (only root icon + current
+ * segment), returns `''`. Do **not** use POSIX dirname here: e.g. `/data/upload` would yield `/data`
+ * even when the UI shows no parent crumb, which breaks mapped labels and falls back to `upload`.
+ */
+export function deepestBreadcrumbParentPrefix(S: string, parentPathsFromLinks: string[]): string {
+  let best = '';
+  const s = pathKey(S);
+  for (const raw of parentPathsFromLinks) {
+    const pk = pathKey(raw);
+    if (!pk || pk === s) continue;
+    if (s.startsWith(`${pk}/`) || (pk === '/' && s !== '/')) {
+      if (pk.length > best.length) best = pk;
+    }
+  }
+  return best;
+}
+
+function pathKey(p: string): string {
+  return p.trim().replace(/\\/g, '/').replace(/\/+$/, '') || '';
+}
+
 export function pathsUnchangedByMappings(
   S: string,
   S_parent: string,
@@ -90,9 +113,9 @@ export function mappedFolderDisplayLabel(
   const m = normalizeSeparators(M);
   const mp = normalizeSeparators(M_parent);
 
+  /* Root-relative folder (no mapped parent): show full mapped path so e.g. `/z` is not reduced to `z`. */
   if (!mp) {
-    const t = m.replace(/^\/+/, '');
-    return t || fallback;
+    return m || fallback;
   }
 
   const mpSlash = mp.endsWith('/') ? mp : `${mp}/`;

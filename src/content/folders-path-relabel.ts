@@ -1,4 +1,5 @@
 import {
+  deepestBreadcrumbParentPrefix,
   mappedFolderDisplayLabel,
   parentServerFolderPath,
   parseFoldersPathQuery,
@@ -53,21 +54,27 @@ export function applyFoldersPathRelabel(settings: ExtensionSettings): void {
 
   const { pathMappings } = settings;
 
-  const breadcrumbNav = document.querySelector('nav.flex.items-center.py-2');
+  /* Breadcrumbs live under `main` (see `user-page-layout.svelte`); avoid any other `nav` on the page. */
+  const breadcrumbNav = document.querySelector('main nav.flex.items-center.py-2');
+  const currentCrumbProbe = breadcrumbNav?.querySelector<HTMLParagraphElement>(
+    'ol.flex li p.cursor-default.whitespace-pre-wrap',
+  );
+
   if (breadcrumbNav) {
+    const pathParamsFromBreadcrumbLinks: string[] = [];
     for (const a of breadcrumbNav.querySelectorAll<HTMLAnchorElement>(
       'ol.flex a[href*="/folders"][href*="path="]',
     )) {
+      const q = parseFoldersPathQuery(a.href);
+      if (q !== null) pathParamsFromBreadcrumbLinks.push(q);
       relabelFolderAnchor(a, pathMappings, a);
     }
 
-    const currentCrumb = breadcrumbNav.querySelector<HTMLParagraphElement>(
-      'ol.flex li p.cursor-default.whitespace-pre-wrap',
-    );
+    const currentCrumb = currentCrumbProbe;
     if (currentCrumb) {
       const S = parseFoldersPathQuery(location.href);
       if (S !== null) {
-        const Sp = parentServerFolderPath(S);
+        const Sp = deepestBreadcrumbParentPrefix(S, pathParamsFromBreadcrumbLinks);
         if (!pathsUnchangedByMappings(S, Sp, pathMappings)) {
           const next = mappedFolderDisplayLabel(S, Sp, pathMappings);
           if (currentCrumb.textContent?.trim() !== next) {

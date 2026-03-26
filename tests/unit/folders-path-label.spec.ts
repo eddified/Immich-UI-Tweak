@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PathMappingRow } from '../../src/shared/storage-types';
 import {
+  deepestBreadcrumbParentPrefix,
   lastServerPathSegment,
   mappedFolderDisplayLabel,
   parentServerFolderPath,
@@ -50,6 +51,18 @@ describe('lastServerPathSegment', () => {
   });
 });
 
+describe('deepestBreadcrumbParentPrefix', () => {
+  it('returns empty when breadcrumb has no path= links (only root + current p)', () => {
+    expect(deepestBreadcrumbParentPrefix('/data/upload', [])).toBe('');
+  });
+
+  it('returns longest strict prefix among link paths', () => {
+    expect(deepestBreadcrumbParentPrefix('/data/upload/photos', ['/data', '/data/upload'])).toBe(
+      '/data/upload',
+    );
+  });
+});
+
 describe('pathsUnchangedByMappings', () => {
   it('is true when mappings list is empty', () => {
     expect(pathsUnchangedByMappings('/data/a', '/data', [])).toBe(true);
@@ -90,5 +103,10 @@ describe('mappedFolderDisplayLabel', () => {
   it('falls back to last server segment when relative mapping fails', () => {
     const rows: PathMappingRow[] = [{ localPath: '/z', immichPath: '/unrelated' }];
     expect(mappedFolderDisplayLabel('/data/foo', '/data', rows)).toBe('foo');
+  });
+
+  it('shows full mapped path when parent is root-empty (docker root swap)', () => {
+    const rows: PathMappingRow[] = [{ localPath: '/z', immichPath: '/data/upload' }];
+    expect(mappedFolderDisplayLabel('/data/upload', '', rows)).toBe('/z');
   });
 });

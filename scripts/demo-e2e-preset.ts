@@ -45,6 +45,7 @@ export async function applyExtensionSettingsForSite(
     state: 'visible',
     timeout: 5_000,
   });
+  await page.waitForTimeout(300);
 }
 
 export async function applyDemoExtensionSettings(
