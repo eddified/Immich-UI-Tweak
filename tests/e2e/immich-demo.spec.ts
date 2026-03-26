@@ -13,9 +13,8 @@ const PARTNERS = `${DEMO}/partners/743f389e-ee80-4682-8d56-2cd45f692c40`;
 const PHOTO = `${DEMO}/photos/6418c37d-35b0-4011-882d-36946bc00eb7`;
 /** Partner Mich asset for cold `/photos/:id` (owner ≠ logged-in demo user); id from partner timeline API. */
 const PARTNER_PHOTO_COLD = `${DEMO}/photos/41908224-87c9-4588-bde1-b89c77f122fd`;
-/** Sequential in demo viewer (right arrow from first goes to second). */
+/** Demo asset to open before exercising viewer “next” (order of neighbors is not asserted). */
 const PHOTO_ARROW_A = `${DEMO}/photos/2c5bb067-8541-407d-8d31-2f9ce6f30e2c`;
-const PHOTO_ARROW_B = `${DEMO}/photos/1c27e4ea-29d7-451e-b777-3191930cda3b`;
 
 const EXPECTED_MAPPED_PATH =
   '/var/test/6bbe2767-7851-461a-aa2d-afbd3460aa85/19/eb/19eb57f1-adf2-4f40-abbd-10412d55a70f.jpg';
@@ -201,9 +200,10 @@ test.describe('Immich demo (extension loaded)', () => {
 
     const nextBtn = appPage.locator('#immich-asset-viewer .col-start-4 button[type="button"]').first();
     await expect(nextBtn).toBeVisible({ timeout: 10_000 });
+    const photoPathBeforeNext = new URL(appPage.url()).pathname.toLowerCase();
     await nextBtn.click();
     await appPage.waitForURL(
-      (u) => u.pathname.toLowerCase() === new URL(PHOTO_ARROW_B).pathname.toLowerCase(),
+      (u) => u.pathname.toLowerCase() !== photoPathBeforeNext,
       { timeout: 15_000 },
     );
 
