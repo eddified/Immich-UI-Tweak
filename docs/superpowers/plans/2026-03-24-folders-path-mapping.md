@@ -133,7 +133,7 @@ For **breadcrumb current folder** `<p class="cursor-default whitespace-pre-wrap"
 3. Same `mappedFolderDisplayLabel` with `S_parent` = parent of current folder.
 4. Set `textContent` on that `p`.
 
-Mark elements with `data-immich-ui-helper-folders-label="1"` **after** successful write if useful for debugging; optional.
+Mark elements with `data-immich-ui-tweak-folders-label="1"` **after** successful write if useful for debugging; optional.
 
 - [ ] **Step 4: Self-review checklist**
 

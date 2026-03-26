@@ -3,8 +3,8 @@ import { parseOriginalPathFromAssetJson, parseOwnerIdFromAssetJson } from './sha
 import { DEFAULT_SETTINGS, STORAGE_KEYS } from './shared/storage-types';
 import { enabledUrlsToMatchPatterns } from './shared/url-match';
 
-const CONTENT_SCRIPT_ID = 'immich-ui-helper-content';
-const INJECTED_MAIN_CS_ID = 'immich-ui-helper-injected-main';
+const CONTENT_SCRIPT_ID = 'immich-ui-tweak-content';
+const INJECTED_MAIN_CS_ID = 'immich-ui-tweak-injected-main';
 
 function loadEnabledUrlsFromSync(): Promise<string[]> {
   return new Promise((resolve) => {
@@ -103,7 +103,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type === 'immich-ui-helper:fetch-me-main') {
+  if (message?.type === 'immich-ui-tweak:fetch-me-main') {
     const tabId = sender.tab?.id;
     if (tabId === undefined) {
       sendResponse({ ok: false, error: 'no-tab' });
@@ -141,7 +141,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message?.type === 'immich-ui-helper:fetch-asset-main' && typeof message.assetId === 'string') {
+  if (message?.type === 'immich-ui-tweak:fetch-asset-main' && typeof message.assetId === 'string') {
     const tabId = sender.tab?.id;
     if (tabId === undefined) {
       sendResponse({ ok: false, error: 'no-tab' });
@@ -185,7 +185,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message?.type !== 'immich-ui-helper:inject-main') {
+  if (message?.type !== 'immich-ui-tweak:inject-main') {
     return false;
   }
   const tabId = sender.tab?.id;

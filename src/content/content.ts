@@ -31,7 +31,7 @@ import {
 import { isUrlEnabled } from '../shared/url-match';
 import { applyFoldersPathRelabel } from './folders-path-relabel';
 
-const MSG_SOURCE = 'immich-ui-helper';
+const MSG_SOURCE = 'immich-ui-tweak';
 const MSG_TYPE = 'ownerPairs';
 const MSG_CURRENT_USER = 'currentUser';
 const MSG_ASSET_DETAIL = 'assetDetail';
@@ -120,7 +120,7 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
 function requestMainWorldInject(): void {
   if (injectRequested) return;
   injectRequested = true;
-  chrome.runtime.sendMessage({ type: 'immich-ui-helper:inject-main' }, () => {
+  chrome.runtime.sendMessage({ type: 'immich-ui-tweak:inject-main' }, () => {
     void chrome.runtime.lastError;
   });
 }
@@ -187,10 +187,10 @@ function removeExtensionElements(): void {
   resolveMeUserIdInflight = null;
   sessionUserId = undefined;
 
-  document.querySelectorAll('.immich-ui-helper-uploader-overlay').forEach((el) => el.remove());
-  document.querySelectorAll('.immich-ui-helper-viewer-avatar').forEach((el) => el.remove());
-  document.querySelectorAll('[data-asset].immich-ui-helper-thumb-anchor').forEach((el) => {
-    el.classList.remove('immich-ui-helper-thumb-anchor');
+  document.querySelectorAll('.immich-ui-tweak-uploader-overlay').forEach((el) => el.remove());
+  document.querySelectorAll('.immich-ui-tweak-viewer-avatar').forEach((el) => el.remove());
+  document.querySelectorAll('[data-asset].immich-ui-tweak-thumb-anchor').forEach((el) => {
+    el.classList.remove('immich-ui-tweak-thumb-anchor');
   });
 
   removeInjectedPartnerPath(document.getElementById('detail-panel'));
@@ -235,38 +235,38 @@ function renderLetterFigure(
   size: 'thumb' | 'viewer',
 ): void {
   const bg = AVATAR_COLOR_BG[avatarColor] ?? AVATAR_COLOR_BG.gray;
-  const existingSpan = figure.querySelector<HTMLElement>('span.immich-ui-helper-avatar-letter');
+  const existingSpan = figure.querySelector<HTMLElement>('span.immich-ui-tweak-avatar-letter');
   if (
     existingSpan &&
-    existingSpan.dataset.immichUiHelperAvatarLetter === letter &&
-    figure.classList.contains(`immich-ui-helper-avatar--${size}`) &&
-    figure.classList.contains('immich-ui-helper-avatar--letter')
+    existingSpan.dataset.immichUiTweakAvatarLetter === letter &&
+    figure.classList.contains(`immich-ui-tweak-avatar--${size}`) &&
+    figure.classList.contains('immich-ui-tweak-avatar--letter')
   ) {
     if (figure.style.backgroundColor !== bg) figure.style.backgroundColor = bg;
     return;
   }
 
-  figure.className = `immich-ui-helper-avatar immich-ui-helper-avatar--${size} immich-ui-helper-avatar--letter`;
+  figure.className = `immich-ui-tweak-avatar immich-ui-tweak-avatar--${size} immich-ui-tweak-avatar--letter`;
   figure.style.backgroundColor = bg;
   figure.style.color = '#f8fafc';
   const span = document.createElement('span');
-  span.className = 'immich-ui-helper-avatar-letter';
+  span.className = 'immich-ui-tweak-avatar-letter';
   span.textContent = letter;
-  span.dataset.immichUiHelperAvatarLetter = letter;
+  span.dataset.immichUiTweakAvatarLetter = letter;
   figure.replaceChildren(span);
 }
 
 function renderPhotoFigure(figure: HTMLElement, photoUrl: string, size: 'thumb' | 'viewer', user: ImmichUserPublic): void {
-  const existing = figure.querySelector<HTMLImageElement>('img.immich-ui-helper-avatar-img');
+  const existing = figure.querySelector<HTMLImageElement>('img.immich-ui-tweak-avatar-img');
   if (existing && existing.src === photoUrl) {
     return;
   }
 
-  figure.className = `immich-ui-helper-avatar immich-ui-helper-avatar--${size} immich-ui-helper-avatar--photo`;
+  figure.className = `immich-ui-tweak-avatar immich-ui-tweak-avatar--${size} immich-ui-tweak-avatar--photo`;
   figure.style.backgroundColor = '';
   figure.style.color = '';
   const img = document.createElement('img');
-  img.className = 'immich-ui-helper-avatar-img';
+  img.className = 'immich-ui-tweak-avatar-img';
   img.alt = '';
   img.decoding = 'async';
   img.src = photoUrl;
@@ -281,7 +281,7 @@ function renderPhotoFigure(figure: HTMLElement, photoUrl: string, size: 'thumb' 
  * Match Immich UserAvatar: use GET /users/:id → profileImagePath ? photo : name[0] + avatarColor.
  */
 function scheduleUploaderBadge(container: HTMLElement, ownerId: string, size: 'thumb' | 'viewer'): void {
-  container.dataset.immichUiHelperBadgeOwner = ownerId;
+  container.dataset.immichUiTweakBadgeOwner = ownerId;
   const myGen = (badgeRenderGenByContainer.get(container) ?? 0) + 1;
   badgeRenderGenByContainer.set(container, myGen);
 
@@ -290,13 +290,13 @@ function scheduleUploaderBadge(container: HTMLElement, ownerId: string, size: 't
     const user = await fetchUser(jobOwner);
     if (
       badgeRenderGenByContainer.get(container) !== myGen ||
-      container.dataset.immichUiHelperBadgeOwner !== jobOwner ||
+      container.dataset.immichUiTweakBadgeOwner !== jobOwner ||
       !container.isConnected
     ) {
       return;
     }
 
-    let figure = container.querySelector<HTMLElement>('figure.immich-ui-helper-avatar');
+    let figure = container.querySelector<HTMLElement>('figure.immich-ui-tweak-avatar');
     if (!figure) {
       figure = document.createElement('figure');
       container.appendChild(figure);
@@ -304,9 +304,9 @@ function scheduleUploaderBadge(container: HTMLElement, ownerId: string, size: 't
 
     if (!user) {
       const sig = `${jobOwner}|err`;
-      if (container.dataset.immichUiHelperBadgeSig === sig) return;
+      if (container.dataset.immichUiTweakBadgeSig === sig) return;
       renderLetterFigure(figure, '?', 'gray', size);
-      container.dataset.immichUiHelperBadgeSig = sig;
+      container.dataset.immichUiTweakBadgeSig = sig;
       return;
     }
 
@@ -315,26 +315,26 @@ function scheduleUploaderBadge(container: HTMLElement, ownerId: string, size: 't
     if (!hasPhoto) {
       const letter = avatarInitialLetter(user.name, user.email);
       const sig = `${jobOwner}|${changed}|l|${letter}|${user.avatarColor}`;
-      if (container.dataset.immichUiHelperBadgeSig === sig) return;
+      if (container.dataset.immichUiTweakBadgeSig === sig) return;
       renderLetterFigure(figure, letter, user.avatarColor, size);
-      container.dataset.immichUiHelperBadgeSig = sig;
+      container.dataset.immichUiTweakBadgeSig = sig;
       return;
     }
 
     resolveImmichUsersApiBase();
     const photoUrl = profileImageAbsoluteUrl(jobOwner, user.profileChangedAt);
     const sig = `${jobOwner}|${changed}|p|${photoUrl}`;
-    if (container.dataset.immichUiHelperBadgeSig === sig) return;
+    if (container.dataset.immichUiTweakBadgeSig === sig) return;
 
     renderPhotoFigure(figure, photoUrl, size, user);
     if (
       badgeRenderGenByContainer.get(container) !== myGen ||
-      container.dataset.immichUiHelperBadgeOwner !== jobOwner ||
+      container.dataset.immichUiTweakBadgeOwner !== jobOwner ||
       !container.isConnected
     ) {
       return;
     }
-    container.dataset.immichUiHelperBadgeSig = sig;
+    container.dataset.immichUiTweakBadgeSig = sig;
   })();
 }
 
@@ -361,7 +361,7 @@ function thumbnailHasStackBadge(thumb: HTMLElement): boolean {
 
 function updateThumbnailOverlays(): void {
   if (!settings.showPartnerIcons) {
-    document.querySelectorAll('.immich-ui-helper-uploader-overlay').forEach((el) => el.remove());
+    document.querySelectorAll('.immich-ui-tweak-uploader-overlay').forEach((el) => el.remove());
     return;
   }
 
@@ -372,27 +372,27 @@ function updateThumbnailOverlays(): void {
 
     const ownerId = ownerByAsset.get(assetId);
     if (!ownerId) {
-      thumb.querySelector('.immich-ui-helper-uploader-overlay')?.remove();
-      thumb.classList.remove('immich-ui-helper-thumb-anchor');
+      thumb.querySelector('.immich-ui-tweak-uploader-overlay')?.remove();
+      thumb.classList.remove('immich-ui-tweak-thumb-anchor');
       return;
     }
 
     if (!shouldShowUploaderOverlay(ownerId)) {
-      thumb.querySelector('.immich-ui-helper-uploader-overlay')?.remove();
-      thumb.classList.remove('immich-ui-helper-thumb-anchor');
+      thumb.querySelector('.immich-ui-tweak-uploader-overlay')?.remove();
+      thumb.classList.remove('immich-ui-tweak-thumb-anchor');
       return;
     }
 
-    thumb.classList.add('immich-ui-helper-thumb-anchor');
+    thumb.classList.add('immich-ui-tweak-thumb-anchor');
 
-    let overlay = thumb.querySelector<HTMLElement>('.immich-ui-helper-uploader-overlay');
+    let overlay = thumb.querySelector<HTMLElement>('.immich-ui-tweak-uploader-overlay');
     if (!overlay) {
       overlay = document.createElement('div');
-      overlay.className = 'immich-ui-helper-uploader-overlay';
-      overlay.dataset.immichUiHelperUploader = '';
+      overlay.className = 'immich-ui-tweak-uploader-overlay';
+      overlay.dataset.immichUiTweakUploader = '';
       thumb.appendChild(overlay);
     }
-    overlay.classList.toggle('immich-ui-helper-uploader-overlay--stack', thumbnailHasStackBadge(thumb));
+    overlay.classList.toggle('immich-ui-tweak-uploader-overlay--stack', thumbnailHasStackBadge(thumb));
     scheduleUploaderBadge(overlay, ownerId, 'thumb');
   });
 }
@@ -405,32 +405,32 @@ function parseAssetIdFromHref(): string | null {
 function updateViewerOverlay(): void {
   const actions = document.querySelector<HTMLElement>('[data-testid="asset-viewer-navbar-actions"]');
   if (!actions || !settings.showPartnerIcons) {
-    document.querySelectorAll('.immich-ui-helper-viewer-avatar').forEach((el) => el.remove());
+    document.querySelectorAll('.immich-ui-tweak-viewer-avatar').forEach((el) => el.remove());
     return;
   }
 
   const assetId = parseAssetIdFromHref();
   if (!assetId) {
-    actions.querySelector('.immich-ui-helper-viewer-avatar')?.remove();
+    actions.querySelector('.immich-ui-tweak-viewer-avatar')?.remove();
     return;
   }
 
   const ownerId = ownerByAsset.get(assetId.toLowerCase());
   if (!ownerId) {
-    actions.querySelector('.immich-ui-helper-viewer-avatar')?.remove();
+    actions.querySelector('.immich-ui-tweak-viewer-avatar')?.remove();
     return;
   }
 
   if (!shouldShowUploaderOverlay(ownerId)) {
-    actions.querySelector('.immich-ui-helper-viewer-avatar')?.remove();
+    actions.querySelector('.immich-ui-tweak-viewer-avatar')?.remove();
     return;
   }
 
-  let wrap = actions.querySelector<HTMLElement>('.immich-ui-helper-viewer-avatar');
+  let wrap = actions.querySelector<HTMLElement>('.immich-ui-tweak-viewer-avatar');
   if (!wrap) {
     wrap = document.createElement('div');
-    wrap.className = 'immich-ui-helper-viewer-avatar';
-    wrap.dataset.immichUiHelperUploader = '';
+    wrap.className = 'immich-ui-tweak-viewer-avatar';
+    wrap.dataset.immichUiTweakUploader = '';
     actions.prepend(wrap);
   }
   scheduleUploaderBadge(wrap, ownerId, 'viewer');
@@ -458,7 +458,7 @@ function resetFileLocationTrackingIfAssetChanged(): void {
 
 function removeInjectedPartnerPath(panel: HTMLElement | null): void {
   if (!panel) return;
-  panel.querySelectorAll('[data-immich-ui-helper-injected-path]').forEach((el) => el.remove());
+  panel.querySelectorAll('[data-immich-ui-tweak-injected-path]').forEach((el) => el.remove());
 }
 
 const FILENAME_EXT_RE =
@@ -475,7 +475,7 @@ function findFilenameRow(panel: HTMLElement): HTMLElement | null {
     const p =
       contentCol.querySelector<HTMLElement>(':scope > p.break-all') ??
       contentCol.querySelector<HTMLElement>(':scope > p');
-    if (!p || p.dataset.immichUiHelperInjectedPath) continue;
+    if (!p || p.dataset.immichUiTweakInjectedPath) continue;
     const t = p.textContent?.trim() ?? '';
     if (FILENAME_EXT_RE.test(t)) return p;
   }
@@ -483,7 +483,7 @@ function findFilenameRow(panel: HTMLElement): HTMLElement | null {
   for (const p of panel.querySelectorAll<HTMLElement>('p.break-all')) {
     const cls = p.className;
     if (typeof cls === 'string' && cls.includes('flex') && cls.includes('place-items-center')) {
-      if (!p.dataset.immichUiHelperInjectedPath) return p;
+      if (!p.dataset.immichUiTweakInjectedPath) return p;
     }
   }
   return null;
@@ -495,7 +495,7 @@ function fetchAssetViaMainWorld(
 ): Promise<{ ownerId: string; originalPath: string } | null> {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(
-      { type: 'immich-ui-helper:fetch-asset-main', assetId },
+      { type: 'immich-ui-tweak:fetch-asset-main', assetId },
       (resp: {
         ok?: boolean;
         ownerId?: string | null;
@@ -560,7 +560,7 @@ function scheduleAssetDetailFetchIfMissing(assetId: string): void {
 /** GET /api/users/me in the page main world — isolated `fetch` often returns 401 without session cookies. */
 function fetchMeViaMainWorld(): Promise<string | null> {
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ type: 'immich-ui-helper:fetch-me-main' }, (resp: { ok?: boolean; userId?: string | null }) => {
+    chrome.runtime.sendMessage({ type: 'immich-ui-tweak:fetch-me-main' }, (resp: { ok?: boolean; userId?: string | null }) => {
       void chrome.runtime.lastError;
       if (resp?.ok && typeof resp.userId === 'string' && resp.userId) {
         resolve(resp.userId.toLowerCase());
@@ -622,7 +622,7 @@ function insertPartnerPathRowAfterFilename(
   rawPath: string,
   esc: string,
 ): boolean {
-  if (panel.querySelector(`[data-immich-ui-helper-injected-path="${esc}"]`)) return true;
+  if (panel.querySelector(`[data-immich-ui-tweak-injected-path="${esc}"]`)) return true;
   const filenameRow = findFilenameRow(panel);
   if (!filenameRow?.isConnected) return false;
 
@@ -630,7 +630,7 @@ function insertPartnerPathRowAfterFilename(
   const row = document.createElement('p');
   row.className =
     'text-xs opacity-50 break-all pb-2 hover:text-primary whitespace-pre-wrap';
-  row.dataset.immichUiHelperInjectedPath = assetId;
+  row.dataset.immichUiTweakInjectedPath = assetId;
 
   const a = document.createElement('a');
   a.href = folderPageHref(rawPath);
@@ -655,7 +655,7 @@ function schedulePartnerPathInjection(panel: HTMLElement, assetId: string): void
 
   const esc = escapeForCssAttr(assetId);
   const existingAnchor = panel.querySelector<HTMLAnchorElement>(
-    `p[data-immich-ui-helper-injected-path="${esc}"] a[data-raw-path]`,
+    `p[data-immich-ui-tweak-injected-path="${esc}"] a[data-raw-path]`,
   );
   if (existingAnchor) {
     const raw = existingAnchor.dataset.rawPath;
@@ -739,7 +739,7 @@ function schedulePartnerPathInjection(panel: HTMLElement, assetId: string): void
 function findFolderPathLink(panel: HTMLElement, pathMappings: PathMappingRow[]): HTMLAnchorElement | null {
   const links = panel.querySelectorAll<HTMLAnchorElement>('a[href*="/folders"]');
   for (const a of links) {
-    if (a.closest('[data-immich-ui-helper-injected-path]')) continue;
+    if (a.closest('[data-immich-ui-tweak-injected-path]')) continue;
     const t = a.textContent?.trim() ?? '';
     if (folderLinkTextLooksLikePathDisplay(t, pathMappings)) {
       return a;

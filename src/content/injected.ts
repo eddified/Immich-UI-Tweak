@@ -8,11 +8,11 @@ import { parseCurrentUserIdFromMeJson, parseUserJson } from '../shared/immich-us
 
 declare global {
   interface Window {
-    __immichUiHelperFetchPatched?: boolean;
+    __immichUiTweakFetchPatched?: boolean;
   }
 }
 
-const MSG_SOURCE = 'immich-ui-helper';
+const MSG_SOURCE = 'immich-ui-tweak';
 const MSG_TYPE = 'ownerPairs';
 /** Emitted when Immich's own `fetch` returns `/api/users/me` — no extra requests from the extension. */
 const MSG_CURRENT_USER = 'currentUser';
@@ -93,8 +93,8 @@ function emitUserDetailFromResponse(urlStr: string, body: unknown): void {
 }
 
 function patchFetch(): void {
-  if (window.__immichUiHelperFetchPatched) return;
-  window.__immichUiHelperFetchPatched = true;
+  if (window.__immichUiTweakFetchPatched) return;
+  window.__immichUiTweakFetchPatched = true;
 
   const orig = window.fetch.bind(window);
   window.fetch = async function (

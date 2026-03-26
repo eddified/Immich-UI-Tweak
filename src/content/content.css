@@ -1,8 +1,8 @@
-[data-asset].immich-ui-helper-thumb-anchor {
+[data-asset].immich-ui-tweak-thumb-anchor {
   position: relative !important;
 }
 
-.immich-ui-helper-uploader-overlay {
+.immich-ui-tweak-uploader-overlay {
   position: absolute;
   top: 6px;
   right: 6px;
@@ -17,11 +17,11 @@
 }
 
 /* Leave room for stack count + burst icon (Immich thumbnail.svelte: top-0 inset-e-0, icon 24px, pe-2 pt-2). */
-.immich-ui-helper-uploader-overlay--stack {
+.immich-ui-tweak-uploader-overlay--stack {
   right: 62px;
 }
 
-.immich-ui-helper-viewer-avatar {
+.immich-ui-tweak-viewer-avatar {
   flex-shrink: 0;
   width: 40px;
   height: 40px;
@@ -33,7 +33,7 @@
 }
 
 /* Same structure as Immich UserAvatar: <figure> + <img> or <span> */
-.immich-ui-helper-avatar {
+.immich-ui-tweak-avatar {
   margin: 0;
   width: 100%;
   height: 100%;
@@ -45,21 +45,21 @@
   box-sizing: border-box;
 }
 
-.immich-ui-helper-avatar--thumb .immich-ui-helper-avatar-letter {
+.immich-ui-tweak-avatar--thumb .immich-ui-tweak-avatar-letter {
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
   user-select: none;
 }
 
-.immich-ui-helper-avatar--viewer .immich-ui-helper-avatar-letter {
+.immich-ui-tweak-avatar--viewer .immich-ui-tweak-avatar-letter {
   font-size: 14px;
   font-weight: 600;
   line-height: 1;
   user-select: none;
 }
 
-.immich-ui-helper-avatar-img {
+.immich-ui-tweak-avatar-img {
   width: 100%;
   height: 100%;
   object-fit: cover;

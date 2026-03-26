@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Immich UI Helper",
+  "name": "Immich UI Tweak",
   "version": "0.1.0",
   "description": "Uploader avatars and Docker path mapping for Immich web.",
   "permissions": ["storage", "scripting", "tabs"],

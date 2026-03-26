@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Immich logomark: exact paths copied from immich/design/immich-logo.svg (unchanged).
-  Pencil: original overlay for Immich UI Helper extension concept only.
+  Pencil: original overlay for Immich UI Tweak extension concept only.
   No background rect — transparent for toolbar / PNG export.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 792 792" width="1024" height="1024">

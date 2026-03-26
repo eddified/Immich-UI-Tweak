@@ -91,7 +91,7 @@ test.describe('User Immich instance (extension + partner path)', () => {
     if (loginResult === 'no-password-field') {
       test.skip(
         true,
-        'Immich login uses Cloudflare Access / SSO (no password field). After you log in manually in Chrome with this extension, cold-open a partner photo and confirm [data-immich-ui-helper-injected-path] appears in #detail-panel.',
+        'Immich login uses Cloudflare Access / SSO (no password field). After you log in manually in Chrome with this extension, cold-open a partner photo and confirm [data-immich-ui-tweak-injected-path] appears in #detail-panel.',
       );
     }
 

@@ -1,7 +1,7 @@
 # Folders UI path mapping (extension-only) — design spec
 
 **Status:** Approved for implementation planning  
-**Product:** immich-ui-helper (browser extension)  
+**Product:** immich-ui-tweak (browser extension)  
 **Date:** 2026-03-24
 
 ---
@@ -98,7 +98,7 @@ Selectors should be **as narrow as practical** and centralized so Immich upgrade
 
 - Immich/Svelte will **re-render** DOM on navigation. The extension must **re-apply** relabeling after such updates (e.g. debounced `MutationObserver` on a stable ancestor, and/or hooks aligned with existing content-script scheduling such as `requestAnimationFrame` passes — follow patterns already used in `content.ts`).
 
-- Mark processed nodes with a **`data-immich-ui-helper-…`** attribute to avoid redundant work or fighting Immich updates; **re-process when `href` or pathname/search changes** so labels stay correct.
+- Mark processed nodes with a **`data-immich-ui-tweak-…`** attribute to avoid redundant work or fighting Immich updates; **re-process when `href` or pathname/search changes** so labels stay correct.
 
 - **Do not** change `href` when reconciling — only text.
 

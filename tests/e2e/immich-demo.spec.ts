@@ -108,10 +108,10 @@ test.describe('Immich demo (extension loaded)', () => {
     await expect(thumb).toBeVisible({ timeout: 12_000 });
     await expect(thumb).toHaveAttribute('data-asset', /[0-9a-f-]{8}-/i);
 
-    const overlay = thumb.locator('[data-immich-ui-helper-uploader]');
+    const overlay = thumb.locator('[data-immich-ui-tweak-uploader]');
     await expect(overlay).toBeVisible();
     // Partner Mich has no profile photo on demo — extension shows letter avatar like Immich UserAvatar.
-    const letter = overlay.locator('[data-immich-ui-helper-avatar-letter]');
+    const letter = overlay.locator('[data-immich-ui-tweak-avatar-letter]');
     await expect(letter).toHaveText('M', { timeout: 15_000 });
 
     const thumbBox = await thumb.boundingBox();
@@ -142,7 +142,7 @@ test.describe('Immich demo (extension loaded)', () => {
     await ensureAssetViewerDetailPanelOpen(appPage);
     await expect(appPage.locator('#detail-panel')).toBeVisible({ timeout: 10_000 });
 
-    const injected = appPage.locator('[data-immich-ui-helper-injected-path]');
+    const injected = appPage.locator('[data-immich-ui-tweak-injected-path]');
     await expect(injected).toBeVisible({ timeout: 25_000 });
     const link = injected.locator('a[href*="/folders"]');
     await expect(link).toBeVisible();
@@ -163,7 +163,7 @@ test.describe('Immich demo (extension loaded)', () => {
       timeout: 30_000,
     });
     // Own assets: no viewer overlay unless Show Own Profile Icon is on (default off).
-    await expect(appPage.locator('.immich-ui-helper-viewer-avatar')).toHaveCount(0, { timeout: 15_000 });
+    await expect(appPage.locator('.immich-ui-tweak-viewer-avatar')).toHaveCount(0, { timeout: 15_000 });
 
     await ensureAssetViewerDetailPanelOpen(appPage);
     await expect(appPage.locator('#detail-panel')).toBeVisible();

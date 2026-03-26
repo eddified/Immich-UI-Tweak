@@ -45,7 +45,7 @@ await loginDemoImmich(page);
 await page.goto(landingUrl, { waitUntil: 'domcontentloaded' });
 
 console.log('');
-console.log('Immich UI Helper — dev browser');
+console.log('Immich UI Tweak — dev browser');
 console.log('  Extension:', pathToExtension);
 console.log('  Options: same as Playwright e2e (/var/test ↔ /data/upload, enabled URL demo/)');
 console.log('  Logged in:', DEMO);
