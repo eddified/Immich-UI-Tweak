@@ -106,9 +106,24 @@ button.danger {
   cursor: pointer;
 }
 
+/* Same font size as section <h2> (e.g. "Docker File Mounts") */
+section > .checkbox-row:not(.checkbox-row-nested) {
+  font-size: 1.1rem;
+}
+
 .checkbox-row-nested {
   margin-top: 10px;
   margin-left: 1.75rem;
+}
+
+.replace-folders-page-names-row {
+  margin-top: 14px;
+  font-size: 0.95rem !important;
+  align-items: flex-start;
+}
+
+.replace-folders-page-names-row input {
+  margin-top: 2px;
 }
 
 #save-status {

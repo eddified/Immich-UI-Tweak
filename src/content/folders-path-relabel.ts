@@ -53,6 +53,9 @@ function relabelFolderAnchor(
  * Never sets `href`, `search`, or other navigation attributes.
  */
 export function applyFoldersPathRelabel(settings: ExtensionSettings): void {
+  if (!settings.replaceFoldersPageNames) {
+    return;
+  }
   if (!isFoldersExplorerRoute()) {
     return;
   }

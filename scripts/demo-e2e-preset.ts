@@ -40,6 +40,7 @@ export async function applyExtensionSettingsForSite(
     await inputs.nth(0).fill(rows[i].localPath);
     await inputs.nth(1).fill(rows[i].immichPath);
   }
+  await page.locator('#replace-folders-page-names').setChecked(true);
   await page.locator('#save').click();
   await page.locator('#save-status').filter({ hasText: /Saved/i }).waitFor({
     state: 'visible',

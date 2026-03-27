@@ -88,6 +88,7 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
     [
       STORAGE_KEYS.enabledUrls,
       STORAGE_KEYS.pathMappings,
+      STORAGE_KEYS.replaceFoldersPageNames,
       STORAGE_KEYS.showPartnerIcons,
       STORAGE_KEYS.showOwnProfileIcon,
     ],
@@ -99,6 +100,10 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
         ? (sync[STORAGE_KEYS.pathMappings] as PathMappingRow[])
         : DEFAULT_SETTINGS.pathMappings
       ).map(normalizePathMappingRow);
+      const replaceFoldersPageNames =
+        typeof sync[STORAGE_KEYS.replaceFoldersPageNames] === 'boolean'
+          ? (sync[STORAGE_KEYS.replaceFoldersPageNames] as boolean)
+          : DEFAULT_SETTINGS.replaceFoldersPageNames;
       const showPartnerIcons =
         typeof sync[STORAGE_KEYS.showPartnerIcons] === 'boolean'
           ? (sync[STORAGE_KEYS.showPartnerIcons] as boolean)
@@ -110,6 +115,7 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
       cb({
         enabledUrls: enabledUrls.slice(0, 32),
         pathMappings,
+        replaceFoldersPageNames,
         showPartnerIcons,
         showOwnProfileIcon,
       });
@@ -145,13 +151,15 @@ function scheduleDomUpdate(): void {
     updateThumbnailOverlays();
     updateViewerOverlay();
     expandAndRewriteFilePath();
-    applyFoldersPathRelabel(settings);
-    /* Svelte can overwrite folder labels after our rAF; re-apply on the next task and after layout. */
-    const snap = settings;
-    if (location.pathname === '/folders' || location.pathname.startsWith('/folders/')) {
-      queueMicrotask(() => applyFoldersPathRelabel(snap));
-      setTimeout(() => applyFoldersPathRelabel(snap), 0);
-      setTimeout(() => applyFoldersPathRelabel(snap), 400);
+    if (settings.replaceFoldersPageNames) {
+      applyFoldersPathRelabel(settings);
+      /* Svelte can overwrite folder labels after our rAF; re-apply on the next task and after layout. */
+      const snap = settings;
+      if (location.pathname === '/folders' || location.pathname.startsWith('/folders/')) {
+        queueMicrotask(() => applyFoldersPathRelabel(snap));
+        setTimeout(() => applyFoldersPathRelabel(snap), 0);
+        setTimeout(() => applyFoldersPathRelabel(snap), 400);
+      }
     }
   });
 }
@@ -907,6 +915,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (
     changes[STORAGE_KEYS.enabledUrls] ||
     changes[STORAGE_KEYS.pathMappings] ||
+    changes[STORAGE_KEYS.replaceFoldersPageNames] ||
     changes[STORAGE_KEYS.showPartnerIcons] ||
     changes[STORAGE_KEYS.showOwnProfileIcon]
   ) {

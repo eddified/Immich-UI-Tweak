@@ -1,6 +1,7 @@
 export const STORAGE_KEYS = {
   enabledUrls: 'enabledUrls',
   pathMappings: 'pathMappings',
+  replaceFoldersPageNames: 'replaceFoldersPageNames',
   showPartnerIcons: 'showPartnerIcons',
   showOwnProfileIcon: 'showOwnProfileIcon',
 } as const;
@@ -15,6 +16,8 @@ export interface PathMappingRow {
 export interface ExtensionSettings {
   enabledUrls: string[];
   pathMappings: PathMappingRow[];
+  /** When true, relabel breadcrumb/sidebar text on Immich `/folders` routes using path mappings. */
+  replaceFoldersPageNames: boolean;
   showPartnerIcons: boolean;
   showOwnProfileIcon: boolean;
 }
@@ -22,6 +25,7 @@ export interface ExtensionSettings {
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   enabledUrls: ['https://demo.immich.app'],
   pathMappings: [],
+  replaceFoldersPageNames: false,
   showPartnerIcons: true,
   showOwnProfileIcon: false,
 };

@@ -15,6 +15,7 @@ const addMappingBtn = document.getElementById('add-mapping') as HTMLButtonElemen
 const saveBtn = document.getElementById('save') as HTMLButtonElement;
 const showPartnerIcons = document.getElementById('show-partner-icons') as HTMLInputElement;
 const showOwnProfileIcon = document.getElementById('show-own-profile-icon') as HTMLInputElement;
+const replaceFoldersPageNames = document.getElementById('replace-folders-page-names') as HTMLInputElement;
 const saveStatus = document.getElementById('save-status') as HTMLParagraphElement;
 
 function syncOwnProfileCheckboxEnabled(): void {
@@ -97,6 +98,7 @@ function render(settings: ExtensionSettings): void {
 
   showPartnerIcons.checked = settings.showPartnerIcons;
   showOwnProfileIcon.checked = settings.showOwnProfileIcon;
+  replaceFoldersPageNames.checked = settings.replaceFoldersPageNames;
   syncOwnProfileCheckboxEnabled();
 }
 
@@ -105,6 +107,7 @@ function load(): void {
     [
       STORAGE_KEYS.enabledUrls,
       STORAGE_KEYS.pathMappings,
+      STORAGE_KEYS.replaceFoldersPageNames,
       STORAGE_KEYS.showPartnerIcons,
       STORAGE_KEYS.showOwnProfileIcon,
     ],
@@ -117,6 +120,10 @@ function load(): void {
           ? (sync[STORAGE_KEYS.pathMappings] as PathMappingRow[])
           : DEFAULT_SETTINGS.pathMappings
         ).map(normalizePathMappingRow),
+        replaceFoldersPageNames:
+          typeof sync[STORAGE_KEYS.replaceFoldersPageNames] === 'boolean'
+            ? (sync[STORAGE_KEYS.replaceFoldersPageNames] as boolean)
+            : DEFAULT_SETTINGS.replaceFoldersPageNames,
         showPartnerIcons:
           typeof sync[STORAGE_KEYS.showPartnerIcons] === 'boolean'
             ? (sync[STORAGE_KEYS.showPartnerIcons] as boolean)
@@ -131,6 +138,7 @@ function load(): void {
         void chrome.storage.sync.set({
           [STORAGE_KEYS.enabledUrls]: DEFAULT_SETTINGS.enabledUrls,
           [STORAGE_KEYS.pathMappings]: DEFAULT_SETTINGS.pathMappings,
+          [STORAGE_KEYS.replaceFoldersPageNames]: DEFAULT_SETTINGS.replaceFoldersPageNames,
           [STORAGE_KEYS.showPartnerIcons]: DEFAULT_SETTINGS.showPartnerIcons,
           [STORAGE_KEYS.showOwnProfileIcon]: DEFAULT_SETTINGS.showOwnProfileIcon,
         });
@@ -168,6 +176,7 @@ function save(): void {
   const payload = {
     [STORAGE_KEYS.enabledUrls]: urls,
     [STORAGE_KEYS.pathMappings]: mappings,
+    [STORAGE_KEYS.replaceFoldersPageNames]: replaceFoldersPageNames.checked,
     [STORAGE_KEYS.showPartnerIcons]: showPartnerIcons.checked,
     [STORAGE_KEYS.showOwnProfileIcon]: showOwnProfileIcon.checked,
   };

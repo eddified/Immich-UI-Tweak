@@ -18,8 +18,25 @@
       </section>
 
       <section>
+        <label class="checkbox-row">
+          <input type="checkbox" id="show-partner-icons" checked />
+          <span>Show Profile Icon Overlays</span>
+        </label>
+        <p class="hint">
+          When Show Profile Icon Overlays is on, partner avatars appear on thumbnails and in the photo viewer. Your own
+          assets show an overlay only if Show Own Profile Icon is also checked.
+        </p>
+        <label class="checkbox-row checkbox-row-nested">
+          <input type="checkbox" id="show-own-profile-icon" />
+          <span>Show Own Profile Icon</span>
+        </label>
+      </section>
+
+      <section>
         <h2>Docker File Mounts</h2>
-        <p class="hint">Map server paths to local paths. Both sides are required for each row. Longest Immich path wins.</p>
+        <p class="hint">Optional. Map server paths to local paths. Both sides are
+          required for each row. Longest Immich path wins. When these paths are
+          specified, the "info" panel will show the local path instead of the server path.</p>
         <table id="mapping-table">
           <thead>
             <tr>
@@ -31,20 +48,9 @@
           <tbody id="mapping-body"></tbody>
         </table>
         <button type="button" id="add-mapping">Add mapping</button>
-      </section>
-
-      <section>
-        <label class="checkbox-row">
-          <input type="checkbox" id="show-partner-icons" checked />
-          <span>Show Profile Icon Overlays</span>
-        </label>
-        <p class="hint">
-          When Show Profile Icon Overlays is on, uploader avatars appear on thumbnails and in the photo viewer. Your own
-          assets show an overlay only if Show Own Profile Icon is also checked.
-        </p>
-        <label class="checkbox-row checkbox-row-nested">
-          <input type="checkbox" id="show-own-profile-icon" />
-          <span>Show Own Profile Icon</span>
+        <label class="checkbox-row replace-folders-page-names-row">
+          <input type="checkbox" id="replace-folders-page-names" />
+          <span>Replace Folder Names in the "Folders" Page (doesn't always work well -- not fully supported)</span>
         </label>
       </section>
 
