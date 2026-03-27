@@ -91,6 +91,7 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
       STORAGE_KEYS.replaceFoldersPageNames,
       STORAGE_KEYS.showPartnerIcons,
       STORAGE_KEYS.showOwnProfileIcon,
+      STORAGE_KEYS.autoOpenFileLocation,
     ],
     (sync) => {
       const enabledUrls = Array.isArray(sync[STORAGE_KEYS.enabledUrls])
@@ -112,12 +113,17 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
         typeof sync[STORAGE_KEYS.showOwnProfileIcon] === 'boolean'
           ? (sync[STORAGE_KEYS.showOwnProfileIcon] as boolean)
           : DEFAULT_SETTINGS.showOwnProfileIcon;
+      const autoOpenFileLocation =
+        typeof sync[STORAGE_KEYS.autoOpenFileLocation] === 'boolean'
+          ? (sync[STORAGE_KEYS.autoOpenFileLocation] as boolean)
+          : DEFAULT_SETTINGS.autoOpenFileLocation;
       cb({
         enabledUrls: enabledUrls.slice(0, 32),
         pathMappings,
         replaceFoldersPageNames,
         showPartnerIcons,
         showOwnProfileIcon,
+        autoOpenFileLocation,
       });
     },
   );
@@ -846,7 +852,11 @@ function expandAndRewriteFilePath(): void {
     return;
   }
 
-  if (!didAutoClickShowLocation && clickShowFileLocationIfNeeded(panel)) {
+  if (
+    settings.autoOpenFileLocation &&
+    !didAutoClickShowLocation &&
+    clickShowFileLocationIfNeeded(panel)
+  ) {
     didAutoClickShowLocation = true;
   }
 
@@ -917,7 +927,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
     changes[STORAGE_KEYS.pathMappings] ||
     changes[STORAGE_KEYS.replaceFoldersPageNames] ||
     changes[STORAGE_KEYS.showPartnerIcons] ||
-    changes[STORAGE_KEYS.showOwnProfileIcon]
+    changes[STORAGE_KEYS.showOwnProfileIcon] ||
+    changes[STORAGE_KEYS.autoOpenFileLocation]
   ) {
     readSettingsFromStorage((s) => {
       settings = s;

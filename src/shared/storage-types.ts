@@ -4,6 +4,7 @@ export const STORAGE_KEYS = {
   replaceFoldersPageNames: 'replaceFoldersPageNames',
   showPartnerIcons: 'showPartnerIcons',
   showOwnProfileIcon: 'showOwnProfileIcon',
+  autoOpenFileLocation: 'autoOpenFileLocation',
 } as const;
 
 export const MAX_ENABLED_URLS = 32;
@@ -20,6 +21,8 @@ export interface ExtensionSettings {
   replaceFoldersPageNames: boolean;
   showPartnerIcons: boolean;
   showOwnProfileIcon: boolean;
+  /** When true, the content script clicks Immich's "Show file location" when the info panel opens. */
+  autoOpenFileLocation: boolean;
 }
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
@@ -28,4 +31,5 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   replaceFoldersPageNames: false,
   showPartnerIcons: true,
   showOwnProfileIcon: false,
+  autoOpenFileLocation: true,
 };

@@ -15,6 +15,12 @@ main {
   margin: 0 auto;
 }
 
+.options-logo {
+  display: block;
+  height: auto;
+  margin: 0 auto 20px;
+}
+
 h1 {
   font-size: 1.5rem;
   margin: 0 0 8px;
@@ -126,8 +132,75 @@ section > .checkbox-row:not(.checkbox-row-nested) {
   margin-top: 2px;
 }
 
-#save-status {
+.options-save-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.options-save-row #save-status {
+  flex: 1 1 auto;
+  min-width: min(12rem, 100%);
   min-height: 1.25rem;
+  margin: 0;
   font-size: 0.9rem;
   color: #16a34a;
+  text-align: left;
+}
+
+.options-footer {
+  max-width: 720px;
+  margin: 28px auto 0;
+  padding-top: 16px;
+  border-top: 1px solid #e4e4e7;
+  text-align: center;
+}
+
+.options-privacy {
+  margin-bottom: 18px;
+  text-align: left;
+}
+
+h2.options-privacy-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0 0 6px;
+  color: #3f3f46;
+}
+
+.options-privacy-text {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: #52525b;
+  margin: 0;
+}
+
+.options-privacy-text em {
+  font-style: italic;
+  font-weight: 600;
+  color: #3f3f46;
+}
+
+.options-footer-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: #52525b;
+  text-decoration: none;
+}
+
+.options-footer-link:hover {
+  color: #18181b;
+  text-decoration: underline;
+}
+
+.options-github-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }

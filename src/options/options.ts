@@ -16,6 +16,7 @@ const saveBtn = document.getElementById('save') as HTMLButtonElement;
 const showPartnerIcons = document.getElementById('show-partner-icons') as HTMLInputElement;
 const showOwnProfileIcon = document.getElementById('show-own-profile-icon') as HTMLInputElement;
 const replaceFoldersPageNames = document.getElementById('replace-folders-page-names') as HTMLInputElement;
+const autoOpenFileLocation = document.getElementById('auto-open-file-location') as HTMLInputElement;
 const saveStatus = document.getElementById('save-status') as HTMLParagraphElement;
 
 function syncOwnProfileCheckboxEnabled(): void {
@@ -99,6 +100,7 @@ function render(settings: ExtensionSettings): void {
   showPartnerIcons.checked = settings.showPartnerIcons;
   showOwnProfileIcon.checked = settings.showOwnProfileIcon;
   replaceFoldersPageNames.checked = settings.replaceFoldersPageNames;
+  autoOpenFileLocation.checked = settings.autoOpenFileLocation;
   syncOwnProfileCheckboxEnabled();
 }
 
@@ -110,6 +112,7 @@ function load(): void {
       STORAGE_KEYS.replaceFoldersPageNames,
       STORAGE_KEYS.showPartnerIcons,
       STORAGE_KEYS.showOwnProfileIcon,
+      STORAGE_KEYS.autoOpenFileLocation,
     ],
     (sync) => {
       const settings: ExtensionSettings = {
@@ -132,6 +135,10 @@ function load(): void {
           typeof sync[STORAGE_KEYS.showOwnProfileIcon] === 'boolean'
             ? (sync[STORAGE_KEYS.showOwnProfileIcon] as boolean)
             : DEFAULT_SETTINGS.showOwnProfileIcon,
+        autoOpenFileLocation:
+          typeof sync[STORAGE_KEYS.autoOpenFileLocation] === 'boolean'
+            ? (sync[STORAGE_KEYS.autoOpenFileLocation] as boolean)
+            : DEFAULT_SETTINGS.autoOpenFileLocation,
       };
       const empty = Object.keys(sync).length === 0;
       if (empty) {
@@ -141,6 +148,7 @@ function load(): void {
           [STORAGE_KEYS.replaceFoldersPageNames]: DEFAULT_SETTINGS.replaceFoldersPageNames,
           [STORAGE_KEYS.showPartnerIcons]: DEFAULT_SETTINGS.showPartnerIcons,
           [STORAGE_KEYS.showOwnProfileIcon]: DEFAULT_SETTINGS.showOwnProfileIcon,
+          [STORAGE_KEYS.autoOpenFileLocation]: DEFAULT_SETTINGS.autoOpenFileLocation,
         });
         render(DEFAULT_SETTINGS);
       } else {
@@ -179,6 +187,7 @@ function save(): void {
     [STORAGE_KEYS.replaceFoldersPageNames]: replaceFoldersPageNames.checked,
     [STORAGE_KEYS.showPartnerIcons]: showPartnerIcons.checked,
     [STORAGE_KEYS.showOwnProfileIcon]: showOwnProfileIcon.checked,
+    [STORAGE_KEYS.autoOpenFileLocation]: autoOpenFileLocation.checked,
   };
 
   chrome.storage.sync.set(payload, () => {
