@@ -10,14 +10,30 @@ import { expect, test } from './fixtures';
 
 const DEMO = demoOrigin();
 const PARTNERS = `${DEMO}/partners/743f389e-ee80-4682-8d56-2cd45f692c40`;
-const PHOTO = `${DEMO}/photos/6418c37d-35b0-4011-882d-36946bc00eb7`;
 /** Partner Mich asset for cold `/photos/:id` (owner ≠ logged-in demo user); id from partner timeline API. */
 const PARTNER_PHOTO_COLD = `${DEMO}/photos/41908224-87c9-4588-bde1-b89c77f122fd`;
-/** Demo asset to open before exercising viewer “next” (order of neighbors is not asserted). */
-const PHOTO_ARROW_A = `${DEMO}/photos/2c5bb067-8541-407d-8d31-2f9ce6f30e2c`;
 
-const EXPECTED_MAPPED_PATH =
-  '/var/test/6bbe2767-7851-461a-aa2d-afbd3460aa85/19/eb/19eb57f1-adf2-4f40-abbd-10412d55a70f.jpg';
+/**
+ * Default demo mapping (`applyDemoExtensionSettings`): `/data/upload` → `/var/test`.
+ * Immich original paths look like: `/data/upload/<library-uuid>/<hh>/<hh>/<asset-uuid>.<ext>`
+ */
+const PATH_UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+
+const STRICT_DEMO_MAPPED_FILE_PATH = new RegExp(
+  `^\\s*\\/var\\/test\\/${PATH_UUID}\\/[0-9a-f]{2}\\/[0-9a-f]{2}\\/${PATH_UUID}\\.[a-z0-9]+\\s*$`,
+  'i',
+);
+
+/** Narrow down the folder link; full shape is enforced by {@link assertStrictDemoMappedPathDisplay}. */
+const MAPPED_DEMO_PATH_HINT = /\/var\/test\//;
+
+function assertStrictDemoMappedPathDisplay(text: string | null): void {
+  const t = text?.trim() ?? '';
+  expect(/\/data\/upload/i.test(t), 'mapped path must not contain /data/upload').toBe(false);
+  expect(t, 'mapped path must match /var/test/<uuid>/<hex>/<hex>/<uuid>.<ext>').toMatch(
+    STRICT_DEMO_MAPPED_FILE_PATH,
+  );
+}
 
 /** Demo folders deep path (library + nested segments). */
 const FOLDERS_DEEP_SERVER_PATH =
@@ -40,6 +56,25 @@ async function scrollToFirstJan22Thumbnail(page: Page) {
     await page.waitForTimeout(40);
   }
   return thumb;
+}
+
+/**
+ * Open the viewer on a main-timeline asset. Hard-coded `/photos/:id` URLs break when demo assets
+ * change: Immich opens the viewer only after the asset exists in the loaded timeline.
+ */
+async function openViewerOnFirstMainTimelinePhoto(appPage: Page): Promise<void> {
+  await appPage.goto(`${DEMO}/photos`, { waitUntil: 'load', timeout: 30_000 });
+  const thumb = appPage.locator('#asset-grid [data-asset]').first();
+  await thumb.waitFor({ state: 'visible', timeout: 30_000 });
+  await thumb.click();
+  await appPage.locator('[data-testid="asset-viewer-navbar-actions"]').waitFor({
+    state: 'visible',
+    timeout: 30_000,
+  });
+}
+
+function mappedPathFolderLink(page: Page) {
+  return page.locator('#detail-panel a[href*="/folders"]').filter({ hasText: MAPPED_DEMO_PATH_HINT }).first();
 }
 
 async function saveExtensionOptions(
@@ -157,18 +192,16 @@ test.describe('Immich demo (extension loaded)', () => {
     const appPage = await context.newPage();
     await loginDemoImmich(appPage);
 
-    await appPage.goto(PHOTO, { waitUntil: 'load', timeout: 30_000 });
-    await appPage.locator('[data-testid="asset-viewer-navbar-actions"]').waitFor({
-      state: 'visible',
-      timeout: 30_000,
-    });
+    await openViewerOnFirstMainTimelinePhoto(appPage);
     // Own assets: no viewer overlay unless Show Own Profile Icon is on (default off).
     await expect(appPage.locator('.immich-ui-tweak-viewer-avatar')).toHaveCount(0, { timeout: 15_000 });
 
     await ensureAssetViewerDetailPanelOpen(appPage);
     await expect(appPage.locator('#detail-panel')).toBeVisible();
 
-    await expect(appPage.getByText(EXPECTED_MAPPED_PATH)).toBeVisible();
+    const mappedLink = mappedPathFolderLink(appPage);
+    await expect(mappedLink).toBeVisible({ timeout: 20_000 });
+    assertStrictDemoMappedPathDisplay(await mappedLink.textContent());
   });
 
   test('photo view: mapped path updates on next photo (local roots without leading slash)', async ({
@@ -185,11 +218,7 @@ test.describe('Immich demo (extension loaded)', () => {
     const appPage = await context.newPage();
     await loginDemoImmich(appPage);
 
-    await appPage.goto(PHOTO_ARROW_A, { waitUntil: 'load', timeout: 30_000 });
-    await appPage.locator('[data-testid="asset-viewer-navbar-actions"]').waitFor({
-      state: 'visible',
-      timeout: 30_000,
-    });
+    await openViewerOnFirstMainTimelinePhoto(appPage);
     await ensureAssetViewerDetailPanelOpen(appPage);
     await expect(appPage.locator('#detail-panel')).toBeVisible();
 
@@ -373,24 +402,21 @@ test.describe('Immich demo (extension loaded)', () => {
     const appPage = await context.newPage();
     await loginDemoImmich(appPage);
 
-    await appPage.goto(PHOTO, { waitUntil: 'load', timeout: 30_000 });
-    await appPage.locator('[data-testid="asset-viewer-navbar-actions"]').waitFor({
-      state: 'visible',
-      timeout: 30_000,
-    });
+    await openViewerOnFirstMainTimelinePhoto(appPage);
 
     await ensureAssetViewerDetailPanelOpen(appPage);
     await expect(appPage.locator('#detail-panel')).toBeVisible();
 
-    const pathText = appPage.getByText(EXPECTED_MAPPED_PATH);
-    await expect(pathText).toBeVisible({ timeout: 15_000 });
+    const pathLink = mappedPathFolderLink(appPage);
+    await expect(pathLink).toBeVisible({ timeout: 15_000 });
+    assertStrictDemoMappedPathDisplay(await pathLink.textContent());
 
     await showFileLocationButton(appPage).click();
-    await expect(pathText).toBeHidden({ timeout: 3_000 });
+    await expect(pathLink).toBeHidden({ timeout: 3_000 });
 
     // Regression: extension used to re-click every frame and re-open the path.
     await expect
-      .poll(async () => pathText.isVisible(), { timeout: 5_000, intervals: [250, 400, 600, 800, 1_000] })
+      .poll(async () => pathLink.isVisible(), { timeout: 5_000, intervals: [250, 400, 600, 800, 1_000] })
       .toBe(false);
   });
 });
