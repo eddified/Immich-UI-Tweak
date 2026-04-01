@@ -41,6 +41,16 @@ section {
   margin: 0 0 12px;
 }
 
+.hint kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.88em;
+  padding: 0.12em 0.4em;
+  border: 1px solid #d4d4d8;
+  border-radius: 4px;
+  background: #fafafa;
+  box-shadow: 0 1px 0 #e4e4e7;
+}
+
 #url-list {
   list-style: none;
   padding: 0;

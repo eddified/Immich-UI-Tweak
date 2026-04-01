@@ -5,6 +5,7 @@ export const STORAGE_KEYS = {
   showPartnerIcons: 'showPartnerIcons',
   showOwnProfileIcon: 'showOwnProfileIcon',
   autoOpenFileLocation: 'autoOpenFileLocation',
+  remapSlashToFocusSearch: 'remapSlashToFocusSearch',
 } as const;
 
 export const MAX_ENABLED_URLS = 32;
@@ -23,6 +24,8 @@ export interface ExtensionSettings {
   showOwnProfileIcon: boolean;
   /** When true, the content script clicks Immich's "Show file location" when the info panel opens. */
   autoOpenFileLocation: boolean;
+  /** When true, `/` focuses the navbar search instead of opening Immich's command palette. */
+  remapSlashToFocusSearch: boolean;
 }
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
@@ -32,4 +35,5 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   showPartnerIcons: true,
   showOwnProfileIcon: false,
   autoOpenFileLocation: true,
+  remapSlashToFocusSearch: true,
 };

@@ -93,6 +93,7 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
       STORAGE_KEYS.showPartnerIcons,
       STORAGE_KEYS.showOwnProfileIcon,
       STORAGE_KEYS.autoOpenFileLocation,
+      STORAGE_KEYS.remapSlashToFocusSearch,
     ],
     (sync) => {
       const enabledUrls = Array.isArray(sync[STORAGE_KEYS.enabledUrls])
@@ -118,6 +119,10 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
         typeof sync[STORAGE_KEYS.autoOpenFileLocation] === 'boolean'
           ? (sync[STORAGE_KEYS.autoOpenFileLocation] as boolean)
           : DEFAULT_SETTINGS.autoOpenFileLocation;
+      const remapSlashToFocusSearch =
+        typeof sync[STORAGE_KEYS.remapSlashToFocusSearch] === 'boolean'
+          ? (sync[STORAGE_KEYS.remapSlashToFocusSearch] as boolean)
+          : DEFAULT_SETTINGS.remapSlashToFocusSearch;
       cb({
         enabledUrls: enabledUrls.slice(0, 32),
         pathMappings,
@@ -125,6 +130,7 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
         showPartnerIcons,
         showOwnProfileIcon,
         autoOpenFileLocation,
+        remapSlashToFocusSearch,
       });
     },
   );
@@ -929,7 +935,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
     changes[STORAGE_KEYS.replaceFoldersPageNames] ||
     changes[STORAGE_KEYS.showPartnerIcons] ||
     changes[STORAGE_KEYS.showOwnProfileIcon] ||
-    changes[STORAGE_KEYS.autoOpenFileLocation]
+    changes[STORAGE_KEYS.autoOpenFileLocation] ||
+    changes[STORAGE_KEYS.remapSlashToFocusSearch]
   ) {
     readSettingsFromStorage((s) => {
       settings = s;
@@ -945,4 +952,9 @@ readSettingsFromStorage((s) => {
   scheduleDomUpdate();
 });
 
-installSlashFocusSearch(() => settingsHydrated && isUrlEnabled(location.href, settings.enabledUrls));
+installSlashFocusSearch(
+  () =>
+    settingsHydrated &&
+    settings.remapSlashToFocusSearch &&
+    isUrlEnabled(location.href, settings.enabledUrls),
+);

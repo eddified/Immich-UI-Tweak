@@ -7,7 +7,7 @@
 const MAIN_SEARCH_ID = 'main-search-bar';
 const MOBILE_SEARCH_BUTTON_ID = 'search-button';
 
-function isPlainSlashKey(ev: KeyboardEvent): boolean {
+export function isPlainSlashKey(ev: KeyboardEvent): boolean {
   if (ev.ctrlKey || ev.metaKey || ev.altKey) return false;
   return ev.key === '/' || ev.code === 'Slash';
 }
@@ -27,7 +27,7 @@ function isTextLikeInput(el: HTMLInputElement): boolean {
 }
 
 /** When true, `/` should reach the page (typing in a field, etc.). */
-function shouldPassSlashThrough(active: Element | null): boolean {
+export function shouldPassSlashThrough(active: Element | null): boolean {
   if (!(active instanceof Element)) return false;
   if (active instanceof HTMLTextAreaElement) return true;
   if (active instanceof HTMLSelectElement) return true;
@@ -75,13 +75,13 @@ function onSlashKeydown(ev: KeyboardEvent): void {
   }
 }
 
-export function installSlashFocusSearch(isExtensionActive: () => boolean): void {
-  document.addEventListener(
-    'keydown',
-    (ev) => {
-      if (!isExtensionActive()) return;
-      onSlashKeydown(ev);
-    },
-    true,
-  );
+export function installSlashFocusSearch(isExtensionActive: () => boolean): () => void {
+  const handler = (ev: KeyboardEvent): void => {
+    if (!isExtensionActive()) return;
+    onSlashKeydown(ev);
+  };
+  document.addEventListener('keydown', handler, true);
+  return () => {
+    document.removeEventListener('keydown', handler, true);
+  };
 }

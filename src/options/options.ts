@@ -17,6 +17,7 @@ const showPartnerIcons = document.getElementById('show-partner-icons') as HTMLIn
 const showOwnProfileIcon = document.getElementById('show-own-profile-icon') as HTMLInputElement;
 const replaceFoldersPageNames = document.getElementById('replace-folders-page-names') as HTMLInputElement;
 const autoOpenFileLocation = document.getElementById('auto-open-file-location') as HTMLInputElement;
+const remapSlashToFocusSearch = document.getElementById('remap-slash-to-focus-search') as HTMLInputElement;
 const saveStatus = document.getElementById('save-status') as HTMLParagraphElement;
 
 function syncOwnProfileCheckboxEnabled(): void {
@@ -101,6 +102,7 @@ function render(settings: ExtensionSettings): void {
   showOwnProfileIcon.checked = settings.showOwnProfileIcon;
   replaceFoldersPageNames.checked = settings.replaceFoldersPageNames;
   autoOpenFileLocation.checked = settings.autoOpenFileLocation;
+  remapSlashToFocusSearch.checked = settings.remapSlashToFocusSearch;
   syncOwnProfileCheckboxEnabled();
 }
 
@@ -113,6 +115,7 @@ function load(): void {
       STORAGE_KEYS.showPartnerIcons,
       STORAGE_KEYS.showOwnProfileIcon,
       STORAGE_KEYS.autoOpenFileLocation,
+      STORAGE_KEYS.remapSlashToFocusSearch,
     ],
     (sync) => {
       const settings: ExtensionSettings = {
@@ -139,6 +142,10 @@ function load(): void {
           typeof sync[STORAGE_KEYS.autoOpenFileLocation] === 'boolean'
             ? (sync[STORAGE_KEYS.autoOpenFileLocation] as boolean)
             : DEFAULT_SETTINGS.autoOpenFileLocation,
+        remapSlashToFocusSearch:
+          typeof sync[STORAGE_KEYS.remapSlashToFocusSearch] === 'boolean'
+            ? (sync[STORAGE_KEYS.remapSlashToFocusSearch] as boolean)
+            : DEFAULT_SETTINGS.remapSlashToFocusSearch,
       };
       const empty = Object.keys(sync).length === 0;
       if (empty) {
@@ -149,6 +156,7 @@ function load(): void {
           [STORAGE_KEYS.showPartnerIcons]: DEFAULT_SETTINGS.showPartnerIcons,
           [STORAGE_KEYS.showOwnProfileIcon]: DEFAULT_SETTINGS.showOwnProfileIcon,
           [STORAGE_KEYS.autoOpenFileLocation]: DEFAULT_SETTINGS.autoOpenFileLocation,
+          [STORAGE_KEYS.remapSlashToFocusSearch]: DEFAULT_SETTINGS.remapSlashToFocusSearch,
         });
         render(DEFAULT_SETTINGS);
       } else {
@@ -188,6 +196,7 @@ function save(): void {
     [STORAGE_KEYS.showPartnerIcons]: showPartnerIcons.checked,
     [STORAGE_KEYS.showOwnProfileIcon]: showOwnProfileIcon.checked,
     [STORAGE_KEYS.autoOpenFileLocation]: autoOpenFileLocation.checked,
+    [STORAGE_KEYS.remapSlashToFocusSearch]: remapSlashToFocusSearch.checked,
   };
 
   chrome.storage.sync.set(payload, () => {
