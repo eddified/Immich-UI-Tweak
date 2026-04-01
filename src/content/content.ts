@@ -30,6 +30,7 @@ import {
 } from '../shared/storage-types';
 import { isUrlEnabled } from '../shared/url-match';
 import { applyFoldersPathRelabel } from './folders-path-relabel';
+import { installSlashFocusSearch } from './slash-focus-search';
 
 const MSG_SOURCE = 'immich-ui-tweak';
 const MSG_TYPE = 'ownerPairs';
@@ -943,3 +944,5 @@ readSettingsFromStorage((s) => {
   settingsHydrated = true;
   scheduleDomUpdate();
 });
+
+installSlashFocusSearch(() => settingsHydrated && isUrlEnabled(location.href, settings.enabledUrls));

@@ -10,6 +10,7 @@ A Chromium Manifest V3 browser extension that improves the [Immich](https://immi
 
 - **Partner avatars** — Shows partner users’ avatars on shared assets in the timeline (and related UI) when enabled.
 - **Your profile icon** — Optional display of your own navbar-style avatar in the same contexts.
+- **Forward slash remap** — Remaps forward slash key `/` to put focus in the search field.
 - **Path mapping** — Maps Immich’s in-container paths (e.g. under Docker) to paths on your host so the detail panel’s file location reads correctly on your system.
 - **Folders page labels** — Optional relabeling of breadcrumb/sidebar text on `/folders` routes using the same mappings.
 - **Scoped activation** — Content scripts register only for Immich instance URLs you list in options (up to 32 origins). Default includes `https://demo.immich.app` for trying the demo.
