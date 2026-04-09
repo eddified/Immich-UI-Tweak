@@ -17,7 +17,7 @@ A Chromium Manifest V3 browser extension that improves the [Immich](https://immi
 
 ## Permissions
 
-The extension requests `storage`, `scripting`, and `tabs`, with broad `http://*/`* and `https://*/*` host permissions so you can add any Immich URL in options.
+The extension requests `storage`, and `scripting`, with broad `http://*/`* and `https://*/*` host permissions so you can add any Immich URL in options.
 
 **Scoped activation**: Content scripts register **only** for Immich instance URLs you list in options (up to 32 origins). Default includes `https://demo.immich.app` for trying the demo.
 
