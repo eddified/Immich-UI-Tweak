@@ -3,6 +3,9 @@ import {
   applyPathMappings,
   filterCompleteMappings,
   folderLinkTextLooksLikePathDisplay,
+  formatImmichSuffixForLocalMode,
+  localPathIsWindowsMode,
+  normalizeLocalMappingPathSide,
   normalizeMappingPathSide,
   pathPrefixMatches,
   sortMappingsForReplace,
@@ -32,6 +35,49 @@ describe('normalizeMappingPathSide', () => {
   it('maps empty or whitespace-only to empty', () => {
     expect(normalizeMappingPathSide('')).toBe('');
     expect(normalizeMappingPathSide('   ')).toBe('');
+  });
+});
+
+describe('localPathIsWindowsMode', () => {
+  it('is true only when backslash count exceeds slash count', () => {
+    expect(localPathIsWindowsMode('C:\\foo\\bar')).toBe(true);
+    expect(localPathIsWindowsMode('C:\\foo/bar')).toBe(false);
+    expect(localPathIsWindowsMode('/var/test')).toBe(false);
+    expect(localPathIsWindowsMode('foo\\/')).toBe(false);
+  });
+});
+
+describe('normalizeLocalMappingPathSide', () => {
+  it('linux mode: strips trailing / only, preserves backslashes', () => {
+    expect(normalizeLocalMappingPathSide('/local/')).toBe('/local');
+    expect(normalizeLocalMappingPathSide('/local///')).toBe('/local');
+    expect(normalizeLocalMappingPathSide('foo/bar\\')).toBe('foo/bar\\');
+  });
+
+  it('linux mode: preserves sole /', () => {
+    expect(normalizeLocalMappingPathSide('/')).toBe('/');
+    expect(normalizeLocalMappingPathSide('//')).toBe('/');
+  });
+
+  it('windows mode: strips trailing \\ only, preserves forward slashes', () => {
+    expect(normalizeLocalMappingPathSide('  C:\\foo\\bar\\\\  ')).toBe('C:\\foo\\bar');
+    expect(normalizeLocalMappingPathSide('D:\\photos\\')).toBe('D:\\photos');
+    expect(normalizeLocalMappingPathSide('D:\\photos\\sub/')).toBe('D:\\photos\\sub/');
+  });
+
+  it('maps empty or whitespace-only to empty', () => {
+    expect(normalizeLocalMappingPathSide('')).toBe('');
+    expect(normalizeLocalMappingPathSide('   ')).toBe('');
+  });
+});
+
+describe('formatImmichSuffixForLocalMode', () => {
+  it('leaves suffix unchanged in linux mode', () => {
+    expect(formatImmichSuffixForLocalMode('/x/y', false)).toBe('/x/y');
+  });
+
+  it('replaces / with \\ in windows mode', () => {
+    expect(formatImmichSuffixForLocalMode('/x/y', true)).toBe('\\x\\y');
   });
 });
 
@@ -84,6 +130,11 @@ describe('filterCompleteMappings', () => {
     const rows: PathMappingRow[] = [{ localPath: '/local/', immichPath: '/immich///' }];
     expect(filterCompleteMappings(rows)).toEqual([{ localPath: '/local', immichPath: '/immich' }]);
   });
+
+  it('windows local: strips trailing backslashes only', () => {
+    const rows: PathMappingRow[] = [{ localPath: 'D:\\share\\\\', immichPath: '/x' }];
+    expect(filterCompleteMappings(rows)).toEqual([{ localPath: 'D:\\share', immichPath: '/x' }]);
+  });
 });
 
 describe('sortMappingsForReplace', () => {
@@ -119,6 +170,23 @@ describe('applyPathMappings', () => {
     const once = applyPathMappings('/data/upload/a.jpg', rows);
     expect(applyPathMappings(once, rows)).toBe(once);
   });
+
+  it('windows local: converts immich suffix slashes to backslashes', () => {
+    const rows: PathMappingRow[] = [{ localPath: 'C:\\immich', immichPath: '/data/upload' }];
+    expect(applyPathMappings('/data/upload/x/y.jpg', rows)).toBe('C:\\immich\\x\\y.jpg');
+  });
+
+  it('windows local: exact immich match returns local path only', () => {
+    const rows: PathMappingRow[] = [{ localPath: 'C:\\root', immichPath: '/data/upload' }];
+    expect(applyPathMappings('/data/upload', rows)).toBe('C:\\root');
+  });
+
+  it('is idempotent when mapped path uses windows separators', () => {
+    const rows: PathMappingRow[] = [{ localPath: 'C:\\immich', immichPath: '/data/upload' }];
+    const once = applyPathMappings('/data/upload/a.jpg', rows);
+    expect(once).toBe('C:\\immich\\a.jpg');
+    expect(applyPathMappings(once, rows)).toBe(once);
+  });
 });
 
 describe('folderLinkTextLooksLikePathDisplay', () => {
@@ -134,6 +202,11 @@ describe('folderLinkTextLooksLikePathDisplay', () => {
   it('accepts mapped paths with local root and no leading slash', () => {
     expect(folderLinkTextLooksLikePathDisplay('A/user/uuid/file.jpg', dockerStyle)).toBe(true);
     expect(folderLinkTextLooksLikePathDisplay('B/user/uuid/file.jpg', dockerStyle)).toBe(true);
+  });
+
+  it('accepts windows-style paths under a windows-mode mapping', () => {
+    const win: PathMappingRow[] = [{ localPath: 'C:\\photos', immichPath: '/data/upload' }];
+    expect(folderLinkTextLooksLikePathDisplay('C:\\photos\\u\\f.jpg', win)).toBe(true);
   });
 
   it('rejects empty and bare URLs', () => {

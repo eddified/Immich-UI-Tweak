@@ -1,8 +1,8 @@
 import type { PathMappingRow } from './storage-types';
 
 /**
- * Trim, `\` → `/`, strip trailing `/` so `/a/b/` and `/a/b` are equivalent.
- * Preserves a sole `/` (filesystem root).
+ * Immich (server) path side: trim, `\` → `/`, strip trailing `/` so `/a/b/` and `/a/b` are equivalent.
+ * Preserves a sole `/` (filesystem root). Do not use for Docker **local** paths; use {@link normalizeLocalMappingPathSide}.
  */
 export function normalizeMappingPathSide(s: string): string {
   const t = s.trim().replace(/\\/g, '/');
@@ -16,15 +16,49 @@ export function normalizeMappingPathSide(s: string): string {
   return noTrailing;
 }
 
+/** After trim: Windows mode when `\` count strictly exceeds `/` count. */
+export function localPathIsWindowsMode(trimmedLocalPath: string): boolean {
+  const backslashes = (trimmedLocalPath.match(/\\/g) ?? []).length;
+  const slashes = (trimmedLocalPath.match(/\//g) ?? []).length;
+  return backslashes > slashes;
+}
+
+/**
+ * Normalize Docker **local** path for storage: trim; preserve `\` and `/`; strip trailing `\` (Windows)
+ * or trailing `/` (Linux) per {@link localPathIsWindowsMode}; sole `/` preserved in Linux mode.
+ */
+export function normalizeLocalMappingPathSide(s: string): string {
+  const t = s.trim();
+  if (t === '') {
+    return '';
+  }
+  if (localPathIsWindowsMode(t)) {
+    return t.replace(/\\+$/, '');
+  }
+  const noTrailing = t.replace(/\/+$/, '');
+  if (noTrailing === '') {
+    return '/';
+  }
+  return noTrailing;
+}
+
 export function normalizePathMappingRow(r: PathMappingRow): PathMappingRow {
   return {
-    localPath: normalizeMappingPathSide(r.localPath),
+    localPath: normalizeLocalMappingPathSide(r.localPath),
     immichPath: normalizeMappingPathSide(r.immichPath),
   };
 }
 
 function normalizeComparablePath(s: string): string {
   return s.trim().replace(/\\/g, '/');
+}
+
+/** Immich-derived suffix after prefix replace: POSIX unchanged; Windows maps `/` → `\`. */
+export function formatImmichSuffixForLocalMode(suffix: string, windowsMode: boolean): string {
+  if (!windowsMode) {
+    return suffix;
+  }
+  return suffix.replace(/\//g, '\\');
 }
 
 /**
@@ -66,10 +100,12 @@ export function applyPathMappings(original: string, mappings: PathMappingRow[]):
   const work = normalizeComparablePath(original);
   for (const { localPath, immichPath } of sorted) {
     if (pathPrefixMatches(work, immichPath)) {
+      const windowsMode = localPathIsWindowsMode(localPath);
       if (work === immichPath) {
         return localPath;
       }
-      return localPath + work.slice(immichPath.length);
+      const suffix = work.slice(immichPath.length);
+      return localPath + formatImmichSuffixForLocalMode(suffix, windowsMode);
     }
   }
   return original;
