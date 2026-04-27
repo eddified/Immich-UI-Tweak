@@ -19,6 +19,8 @@ const replaceFoldersPageNames = document.getElementById('replace-folders-page-na
 const autoOpenFileLocation = document.getElementById('auto-open-file-location') as HTMLInputElement;
 const remapSlashToFocusSearch = document.getElementById('remap-slash-to-focus-search') as HTMLInputElement;
 const saveStatus = document.getElementById('save-status') as HTMLParagraphElement;
+const appVersion = document.getElementById('app-version') as HTMLSpanElement;
+appVersion.textContent = `Version ${chrome.runtime.getManifest().version}`;
 
 function syncOwnProfileCheckboxEnabled(): void {
   showOwnProfileIcon.disabled = !showPartnerIcons.checked;
