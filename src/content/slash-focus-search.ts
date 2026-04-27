@@ -7,9 +7,25 @@
 const MAIN_SEARCH_ID = 'main-search-bar';
 const MOBILE_SEARCH_BUTTON_ID = 'search-button';
 
+/**
+ * Mirrors `@immich/ui` `matchesShortcut` so `/` behaves like Immich’s command palette binding
+ * (`{ key: '/' }`): layout-aware `event.key` only, no `event.code`, with explicit modifier parity.
+ */
+function matchesImmichShortcut(
+  event: KeyboardEvent,
+  shortcut: { key: string; alt?: boolean; ctrl?: boolean; shift?: boolean; meta?: boolean },
+): boolean {
+  return (
+    shortcut.key.toLowerCase() === event.key.toLowerCase() &&
+    Boolean(shortcut.alt) === event.altKey &&
+    Boolean(shortcut.ctrl) === event.ctrlKey &&
+    Boolean(shortcut.shift) === event.shiftKey &&
+    Boolean(shortcut.meta) === event.metaKey
+  );
+}
+
 export function isPlainSlashKey(ev: KeyboardEvent): boolean {
-  if (ev.ctrlKey || ev.metaKey || ev.altKey) return false;
-  return ev.key === '/' || ev.code === 'Slash';
+  return matchesImmichShortcut(ev, { key: '/' });
 }
 
 function isTextLikeInput(el: HTMLInputElement): boolean {

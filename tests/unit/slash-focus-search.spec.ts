@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   installSlashFocusSearch,
   isPlainSlashKey,
@@ -29,8 +29,8 @@ describe('isPlainSlashKey', () => {
     expect(isPlainSlashKey(slashKeyEvent({ code: undefined }))).toBe(true);
   });
 
-  it('is true for Slash via code when key differs', () => {
-    expect(isPlainSlashKey(slashKeyEvent({ key: 'Divide', code: 'Slash' }))).toBe(true);
+  it('is false when key is not / (Immich matches key only, not code)', () => {
+    expect(isPlainSlashKey(slashKeyEvent({ key: 'Divide', code: 'Slash' }))).toBe(false);
   });
 
   it('is false when Ctrl is held', () => {
@@ -43,6 +43,18 @@ describe('isPlainSlashKey', () => {
 
   it('is false when Alt is held', () => {
     expect(isPlainSlashKey(slashKeyEvent({ altKey: true }))).toBe(false);
+  });
+
+  it('is false for ? (Shift+/) so the page shortcuts menu can handle it', () => {
+    expect(
+      isPlainSlashKey(
+        slashKeyEvent({ key: '?', code: 'Slash', shiftKey: true }),
+      ),
+    ).toBe(false);
+  });
+
+  it('is false when Shift is held with key / (Immich requires shift parity for { key: "/" })', () => {
+    expect(isPlainSlashKey(slashKeyEvent({ shiftKey: true }))).toBe(false);
   });
 
   it('is false for unrelated keys', () => {
