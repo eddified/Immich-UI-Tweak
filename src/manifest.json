@@ -3,8 +3,14 @@
   "name": "Immich UI Tweak",
   "version": "0.2.0",
   "description": "Partner avatars and Docker path mapping for Immich web.",
-  "permissions": ["storage", "scripting"],
-  "host_permissions": ["http://*/*", "https://*/*"],
+  "permissions": [
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
@@ -25,8 +31,13 @@
   "options_page": "options.html",
   "web_accessible_resources": [
     {
-      "resources": ["injected.js", "assets/google-maps-icon-2026-48w.png"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "injected.js",
+        "assets/google-maps-icon-2026-48w.png"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }
