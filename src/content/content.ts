@@ -66,6 +66,8 @@ let settings: ExtensionSettings = { ...DEFAULT_SETTINGS };
 let settingsHydrated = false;
 /** Detail panel file path: avoid re-clicking "show file location" after the user hides the path (runs every rAF). */
 let detailPanelMounted = false;
+/** When Immich mounts duplicate asset viewers (e.g. map + timeline), the active `#detail-panel` element changes — reset auto-expand state. */
+let lastActiveDetailPanelEl: HTMLElement | null = null;
 let fileLocationAssetKey = '';
 let sawPathLinkThisAsset = false;
 let didAutoClickShowLocation = false;
@@ -257,9 +259,10 @@ function removeExtensionElements(): void {
     el.classList.remove('immich-ui-tweak-thumb-anchor');
   });
 
-  removeInjectedPartnerPath(document.getElementById('detail-panel'));
+  removeInjectedPartnerPathAllViewers();
 
   detailPanelMounted = false;
+  lastActiveDetailPanelEl = null;
   fileLocationAssetKey = '';
   sawPathLinkThisAsset = false;
   didAutoClickShowLocation = false;
@@ -466,14 +469,102 @@ function parseAssetIdFromHref(): string | null {
   return m ? m[1].toLowerCase() : null;
 }
 
+const ASSET_ID_IN_MEDIA_PATH_RE = /\/api\/assets\/([0-9a-f-]{36})\//i;
+
+function viewerRootsFromDom(): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('#immich-asset-viewer'));
+}
+
+function isViewerRootVisuallyPresent(el: HTMLElement): boolean {
+  if (!el.isConnected) return false;
+  const r = el.getBoundingClientRect();
+  if (r.width < 8 || r.height < 8) return false;
+  const st = getComputedStyle(el);
+  if (st.display === 'none' || st.visibility === 'hidden') return false;
+  const op = parseFloat(st.opacity);
+  if (Number.isFinite(op) && op < 0.02) return false;
+  return true;
+}
+
+/**
+ * Immich can mount more than one `#immich-asset-viewer` (e.g. map page portal + timeline portal). Pick the one that
+ * receives paint at the viewport center, else the last visually-present root (topmost portal / fullscreen viewer).
+ */
+function getActiveAssetViewerRoot(): HTMLElement | null {
+  const roots = viewerRootsFromDom();
+  if (roots.length === 0) return null;
+  if (roots.length === 1) return roots[0] ?? null;
+
+  const x = Math.floor(window.innerWidth / 2);
+  const y = Math.floor(window.innerHeight / 2);
+  let top: Element | null = null;
+  try {
+    top = document.elementFromPoint(x, y);
+  } catch {
+    top = null;
+  }
+  if (top) {
+    const hit = top.closest('#immich-asset-viewer');
+    if (hit instanceof HTMLElement && roots.includes(hit)) return hit;
+  }
+
+  const visible = roots.filter(isViewerRootVisuallyPresent);
+  const pool = visible.length > 0 ? visible : roots;
+  for (let i = pool.length - 1; i >= 0; i--) {
+    const el = pool[i];
+    if (el && isViewerRootVisuallyPresent(el)) return el;
+  }
+  return pool[pool.length - 1] ?? null;
+}
+
+function getActiveDetailPanel(): HTMLElement | null {
+  const root = getActiveAssetViewerRoot();
+  if (!root) return null;
+  return root.querySelector<HTMLElement>('#detail-panel');
+}
+
+/** Resolve asset id from URL (`/photos/uuid`) or from the visible viewer's media URLs (map / duplicate viewers). */
+function parseAssetIdFromActiveViewer(): string | null {
+  const root = getActiveAssetViewerRoot();
+  if (!root) return null;
+  for (const el of root.querySelectorAll<HTMLElement>('img, video, source')) {
+    const src =
+      (el instanceof HTMLImageElement && (el.currentSrc || el.src)) ||
+      (el instanceof HTMLVideoElement && el.src) ||
+      (el instanceof HTMLSourceElement && el.src) ||
+      el.getAttribute('src') ||
+      '';
+    if (!src) continue;
+    const m = src.match(ASSET_ID_IN_MEDIA_PATH_RE);
+    if (m) return m[1].toLowerCase();
+  }
+  return null;
+}
+
+function parseCurrentAssetId(): string | null {
+  return parseAssetIdFromHref() ?? parseAssetIdFromActiveViewer();
+}
+
 function updateViewerOverlay(): void {
-  const actions = document.querySelector<HTMLElement>('[data-testid="asset-viewer-navbar-actions"]');
-  if (!actions || !settings.showPartnerIcons) {
+  if (!settings.showPartnerIcons) {
     document.querySelectorAll('.immich-ui-tweak-viewer-avatar').forEach((el) => el.remove());
     return;
   }
 
-  const assetId = parseAssetIdFromHref();
+  const activeRoot = getActiveAssetViewerRoot();
+  for (const el of document.querySelectorAll<HTMLElement>('[data-testid="asset-viewer-navbar-actions"]')) {
+    const host = el.closest('#immich-asset-viewer');
+    if (host !== activeRoot) {
+      el.querySelector('.immich-ui-tweak-viewer-avatar')?.remove();
+    }
+  }
+
+  const actions = activeRoot?.querySelector<HTMLElement>('[data-testid="asset-viewer-navbar-actions"]');
+  if (!actions) {
+    return;
+  }
+
+  const assetId = parseCurrentAssetId();
   if (!assetId) {
     actions.querySelector('.immich-ui-tweak-viewer-avatar')?.remove();
     return;
@@ -501,13 +592,13 @@ function updateViewerOverlay(): void {
 }
 
 function currentFileLocationAssetKey(): string {
-  return parseAssetIdFromHref() ?? `${location.pathname}${location.search}`;
+  return parseCurrentAssetId() ?? `${location.pathname}${location.search}`;
 }
 
 function resetFileLocationTrackingIfAssetChanged(): void {
   const key = currentFileLocationAssetKey();
   if (key !== fileLocationAssetKey) {
-    removeInjectedPartnerPath(document.getElementById('detail-panel'));
+    removeInjectedPartnerPathAllViewers();
     if (fileLocationAssetKey) {
       pathInjectionUseNativeOnly.delete(fileLocationAssetKey);
       pendingPartnerPathByAssetId.delete(fileLocationAssetKey);
@@ -524,6 +615,17 @@ function resetFileLocationTrackingIfAssetChanged(): void {
 function removeInjectedPartnerPath(panel: HTMLElement | null): void {
   if (!panel) return;
   panel.querySelectorAll('[data-immich-ui-tweak-injected-path]').forEach((el) => el.remove());
+}
+
+function forEachDetailPanelInViewers(fn: (panel: HTMLElement) => void): void {
+  for (const root of viewerRootsFromDom()) {
+    const p = root.querySelector<HTMLElement>('#detail-panel');
+    if (p) fn(p);
+  }
+}
+
+function removeInjectedPartnerPathAllViewers(): void {
+  forEachDetailPanelInViewers((p) => removeInjectedPartnerPath(p));
 }
 
 const FILENAME_EXT_RE =
@@ -845,9 +947,9 @@ function schedulePartnerPathInjection(panel: HTMLElement, assetId: string): void
           return;
         }
 
-        if (parseAssetIdFromHref() !== assetId) return;
+        if (parseCurrentAssetId() !== assetId) return;
 
-        const pnl = document.getElementById('detail-panel');
+        const pnl = getActiveDetailPanel();
         if (!pnl?.isConnected) return;
         if (findFolderPathLink(pnl, settings.pathMappings)) return;
 
@@ -902,10 +1004,16 @@ function clickShowFileLocationIfNeeded(panel: HTMLElement): boolean {
 }
 
 function expandAndRewriteFilePath(): void {
-  const panel = document.getElementById('detail-panel');
+  const panel = getActiveDetailPanel();
   if (!panel) {
     detailPanelMounted = false;
+    lastActiveDetailPanelEl = null;
     return;
+  }
+
+  if (panel !== lastActiveDetailPanelEl) {
+    lastActiveDetailPanelEl = panel;
+    detailPanelMounted = false;
   }
 
   // Immich removes #detail-panel when the info panel is closed; remount resets showAssetPath, so allow auto-expand again.
@@ -923,7 +1031,7 @@ function expandAndRewriteFilePath(): void {
     removeInjectedPartnerPath(panel);
     userDismissedPathThisAsset = false;
     sawPathLinkThisAsset = true;
-    const aid = parseAssetIdFromHref()?.toLowerCase();
+    const aid = parseCurrentAssetId();
     const apiRow = aid ? assetApiDetailById.get(aid) : undefined;
     const canonicalFromApi =
       typeof apiRow?.originalPath === 'string' && apiRow.originalPath.trim()
@@ -976,7 +1084,7 @@ function expandAndRewriteFilePath(): void {
     didAutoClickShowLocation = true;
   }
 
-  const aid = parseAssetIdFromHref();
+  const aid = parseCurrentAssetId();
   if (aid) {
     schedulePartnerPathInjection(panel, aid);
   }
@@ -1002,15 +1110,15 @@ function updateGoogleMapsLinkInDetailPanel(): void {
     return;
   }
 
-  const panel = document.getElementById('detail-panel');
+  const panel = getActiveDetailPanel();
   if (!panel) {
     document.querySelectorAll(`[${GOOGLE_MAPS_ROW_ATTR}]`).forEach((el) => el.remove());
     return;
   }
 
-  const assetId = parseAssetIdFromHref()?.toLowerCase();
+  const assetId = parseCurrentAssetId();
   if (!assetId) {
-    panel.querySelectorAll(`[${GOOGLE_MAPS_ROW_ATTR}]`).forEach((el) => el.remove());
+    document.querySelectorAll(`[${GOOGLE_MAPS_ROW_ATTR}]`).forEach((el) => el.remove());
     return;
   }
 
@@ -1018,9 +1126,15 @@ function updateGoogleMapsLinkInDetailPanel(): void {
   const lat = detail?.latitude;
   const lng = detail?.longitude;
   if (typeof lat !== 'number' || typeof lng !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lng)) {
-    panel.querySelectorAll(`[${GOOGLE_MAPS_ROW_ATTR}]`).forEach((el) => el.remove());
+    document.querySelectorAll(`[${GOOGLE_MAPS_ROW_ATTR}]`).forEach((el) => el.remove());
     return;
   }
+
+  forEachDetailPanelInViewers((p) => {
+    if (p !== panel) {
+      p.querySelectorAll(`[${GOOGLE_MAPS_ROW_ATTR}]`).forEach((el) => el.remove());
+    }
+  });
 
   const href = googleMapsSearchUrl(lat, lng);
   const label = formatGoogleMapsCoordLabel(lat, lng);
@@ -1093,13 +1207,13 @@ function updateGoogleMapsEmbedInDetailPanel(): void {
     return;
   }
 
-  const panel = document.getElementById('detail-panel');
+  const panel = getActiveDetailPanel();
   if (!panel) {
     removeGoogleMapsEmbedElements();
     return;
   }
 
-  const assetId = parseAssetIdFromHref()?.toLowerCase();
+  const assetId = parseCurrentAssetId();
   const detail = assetId ? assetApiDetailById.get(assetId) : undefined;
   const lat = detail?.latitude;
   const lng = detail?.longitude;
@@ -1110,10 +1224,7 @@ function updateGoogleMapsEmbedInDetailPanel(): void {
     Number.isFinite(lng);
 
   if (!assetId || !validGps) {
-    panel.querySelectorAll(`[${GOOGLE_MAPS_EMBED_ATTR}]`).forEach((el) => el.remove());
-    panel.querySelectorAll<HTMLElement>(`.${GOOGLE_MAPS_EMBED_HOST_CLASS}`).forEach((el) => {
-      el.classList.remove(GOOGLE_MAPS_EMBED_HOST_CLASS);
-    });
+    removeGoogleMapsEmbedElements();
     return;
   }
 
@@ -1121,10 +1232,7 @@ function updateGoogleMapsEmbedInDetailPanel(): void {
     panel.querySelector<HTMLElement>(':scope > div.h-90') ??
     panel.querySelector<HTMLElement>(':scope div.h-90');
   if (!host?.isConnected) {
-    panel.querySelectorAll(`[${GOOGLE_MAPS_EMBED_ATTR}]`).forEach((el) => el.remove());
-    panel.querySelectorAll<HTMLElement>(`.${GOOGLE_MAPS_EMBED_HOST_CLASS}`).forEach((el) => {
-      el.classList.remove(GOOGLE_MAPS_EMBED_HOST_CLASS);
-    });
+    removeGoogleMapsEmbedElements();
     return;
   }
 
