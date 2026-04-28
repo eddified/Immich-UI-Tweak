@@ -25,7 +25,7 @@
   "options_page": "options.html",
   "web_accessible_resources": [
     {
-      "resources": ["injected.js"],
+      "resources": ["injected.js", "assets/google-maps-icon-2026-48w.png"],
       "matches": ["<all_urls>"]
     }
   ]

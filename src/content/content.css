@@ -90,6 +90,7 @@
 
 .immich-ui-tweak-google-maps-pin {
   flex-shrink: 0;
-  color: #ef4444;
+  display: block;
   line-height: 0;
+  object-fit: contain;
 }

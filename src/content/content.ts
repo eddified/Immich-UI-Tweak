@@ -967,10 +967,6 @@ function formatGoogleMapsCoordLabel(lat: number, lng: number): string {
   return `${lat.toFixed(7)}, ${lng.toFixed(7)}`;
 }
 
-/** Map pin icon (generic drop shape, bundled SVG string). */
-const MAP_PIN_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg>';
-
 function updateGoogleMapsLinkInDetailPanel(): void {
   if (!settingsHydrated || !settings.googleMapsLinkInInfoPanel) {
     document.querySelectorAll(`[${GOOGLE_MAPS_ROW_ATTR}]`).forEach((el) => el.remove());
@@ -1034,14 +1030,19 @@ function updateGoogleMapsLinkInDetailPanel(): void {
   a.setAttribute('aria-label', 'Open in Google Maps');
   a.className = 'immich-ui-tweak-google-maps-link';
 
-  const pinWrap = document.createElement('span');
-  pinWrap.className = 'immich-ui-tweak-google-maps-pin';
-  pinWrap.innerHTML = MAP_PIN_SVG;
+  const pinImg = document.createElement('img');
+  pinImg.className = 'immich-ui-tweak-google-maps-pin';
+  pinImg.src = chrome.runtime.getURL('assets/google-maps-icon-2026-48w.png');
+  pinImg.alt = '';
+  pinImg.width = 24;
+  pinImg.height = 24;
+  pinImg.decoding = 'async';
+  pinImg.draggable = false;
 
   const textSpan = document.createElement('span');
   textSpan.textContent = label;
 
-  a.append(pinWrap, textSpan);
+  a.append(pinImg, textSpan);
   wrap.append(a);
 
   if (host?.isConnected) {
