@@ -453,6 +453,56 @@ test.describe('Immich demo (extension loaded)', () => {
     await expect(appPage.getByTestId('immich-ui-tweak-google-maps-link')).toHaveCount(0);
   });
 
+  test('info panel: no Google Maps embed iframe when replace-OSM option off (default)', async ({
+    context,
+    extensionId,
+  }) => {
+    const page = await context.newPage();
+    await saveExtensionOptions(page, extensionId);
+    await page.close();
+
+    const appPage = await context.newPage();
+    await loginDemoImmich(appPage);
+    await appPage.goto(DEMO_GPS_PHOTO, { waitUntil: 'load', timeout: 60_000 });
+    await appPage.locator('[data-testid="asset-viewer-navbar-actions"]').waitFor({
+      state: 'visible',
+      timeout: 30_000,
+    });
+    await ensureAssetViewerDetailPanelOpen(appPage);
+
+    await expect(appPage.getByTestId('immich-ui-tweak-google-maps-embed-iframe')).toHaveCount(0);
+  });
+
+  test('info panel: Google Maps embed iframe when replace-OSM option on', async ({ context, extensionId }) => {
+    const optPage = await context.newPage();
+    await optPage.goto(`chrome-extension://${extensionId}/options.html`);
+    await optPage.locator('#show-partner-icons').setChecked(true);
+    await optPage.locator('#url-list input').first().fill(`${demoOrigin()}/`);
+    const row = optPage.locator('#mapping-body tr').first();
+    await row.locator('input').nth(0).fill('/var/test');
+    await row.locator('input').nth(1).fill('/data/upload');
+    await optPage.locator('#replace-folders-page-names').setChecked(true);
+    await optPage.locator('#google-maps-embed-instead-of-osm-info-panel').setChecked(true);
+    await optPage.locator('#save').click();
+    await optPage.locator('#save-status').filter({ hasText: /Saved/i }).waitFor({ state: 'visible', timeout: 5_000 });
+    await optPage.close();
+
+    const appPage = await context.newPage();
+    await loginDemoImmich(appPage);
+    await appPage.goto(DEMO_GPS_PHOTO, { waitUntil: 'load', timeout: 60_000 });
+    await appPage.locator('[data-testid="asset-viewer-navbar-actions"]').waitFor({
+      state: 'visible',
+      timeout: 30_000,
+    });
+    await ensureAssetViewerDetailPanelOpen(appPage);
+
+    const iframe = appPage.getByTestId('immich-ui-tweak-google-maps-embed-iframe');
+    await expect(iframe).toBeAttached({ timeout: 30_000 });
+    const src = await iframe.getAttribute('src');
+    expect(src).toBeTruthy();
+    expect(src!.includes('google.com') && src!.includes('/maps')).toBe(true);
+  });
+
   test('info panel: file path stays hidden after user toggles it off', async ({ context, extensionId }) => {
     const page = await context.newPage();
     await saveExtensionOptions(page, extensionId);

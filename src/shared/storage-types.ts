@@ -8,6 +8,8 @@ export const STORAGE_KEYS = {
   remapSlashToFocusSearch: 'remapSlashToFocusSearch',
   /** When true, show a Google Maps link (lat/lng) above the map in the asset info panel. */
   googleMapsLinkInInfoPanel: 'googleMapsLinkInInfoPanel',
+  /** When true, hide Immich's OpenStreetMap-based map and show an embedded Google Map (same coordinates). */
+  googleMapsEmbedInsteadOfOsmInInfoPanel: 'googleMapsEmbedInsteadOfOsmInInfoPanel',
 } as const;
 
 export const MAX_ENABLED_URLS = 32;
@@ -30,6 +32,8 @@ export interface ExtensionSettings {
   remapSlashToFocusSearch: boolean;
   /** When true, inject a Google Maps deep link above the map in the photo info panel when GPS exists. */
   googleMapsLinkInInfoPanel: boolean;
+  /** When true, replace the info panel's OSM map with an embedded Google Map (requires GPS). */
+  googleMapsEmbedInsteadOfOsmInInfoPanel: boolean;
 }
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
@@ -41,4 +45,5 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   autoOpenFileLocation: true,
   remapSlashToFocusSearch: true,
   googleMapsLinkInInfoPanel: true,
+  googleMapsEmbedInsteadOfOsmInInfoPanel: false,
 };

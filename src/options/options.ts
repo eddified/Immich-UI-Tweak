@@ -19,6 +19,9 @@ const replaceFoldersPageNames = document.getElementById('replace-folders-page-na
 const autoOpenFileLocation = document.getElementById('auto-open-file-location') as HTMLInputElement;
 const remapSlashToFocusSearch = document.getElementById('remap-slash-to-focus-search') as HTMLInputElement;
 const googleMapsLinkInInfoPanel = document.getElementById('google-maps-link-info-panel') as HTMLInputElement;
+const googleMapsEmbedInsteadOfOsmInInfoPanel = document.getElementById(
+  'google-maps-embed-instead-of-osm-info-panel',
+) as HTMLInputElement;
 const saveStatus = document.getElementById('save-status') as HTMLParagraphElement;
 const appVersion = document.getElementById('app-version') as HTMLSpanElement;
 appVersion.textContent = `Version ${chrome.runtime.getManifest().version}`;
@@ -107,6 +110,7 @@ function render(settings: ExtensionSettings): void {
   autoOpenFileLocation.checked = settings.autoOpenFileLocation;
   remapSlashToFocusSearch.checked = settings.remapSlashToFocusSearch;
   googleMapsLinkInInfoPanel.checked = settings.googleMapsLinkInInfoPanel;
+  googleMapsEmbedInsteadOfOsmInInfoPanel.checked = settings.googleMapsEmbedInsteadOfOsmInInfoPanel;
   syncOwnProfileCheckboxEnabled();
 }
 
@@ -121,6 +125,7 @@ function load(): void {
       STORAGE_KEYS.autoOpenFileLocation,
       STORAGE_KEYS.remapSlashToFocusSearch,
       STORAGE_KEYS.googleMapsLinkInInfoPanel,
+      STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel,
     ],
     (sync) => {
       const settings: ExtensionSettings = {
@@ -155,6 +160,10 @@ function load(): void {
           typeof sync[STORAGE_KEYS.googleMapsLinkInInfoPanel] === 'boolean'
             ? (sync[STORAGE_KEYS.googleMapsLinkInInfoPanel] as boolean)
             : DEFAULT_SETTINGS.googleMapsLinkInInfoPanel,
+        googleMapsEmbedInsteadOfOsmInInfoPanel:
+          typeof sync[STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel] === 'boolean'
+            ? (sync[STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel] as boolean)
+            : DEFAULT_SETTINGS.googleMapsEmbedInsteadOfOsmInInfoPanel,
       };
       const empty = Object.keys(sync).length === 0;
       if (empty) {
@@ -167,6 +176,8 @@ function load(): void {
           [STORAGE_KEYS.autoOpenFileLocation]: DEFAULT_SETTINGS.autoOpenFileLocation,
           [STORAGE_KEYS.remapSlashToFocusSearch]: DEFAULT_SETTINGS.remapSlashToFocusSearch,
           [STORAGE_KEYS.googleMapsLinkInInfoPanel]: DEFAULT_SETTINGS.googleMapsLinkInInfoPanel,
+          [STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel]:
+            DEFAULT_SETTINGS.googleMapsEmbedInsteadOfOsmInInfoPanel,
         });
         render(DEFAULT_SETTINGS);
       } else {
@@ -208,6 +219,7 @@ function save(): void {
     [STORAGE_KEYS.autoOpenFileLocation]: autoOpenFileLocation.checked,
     [STORAGE_KEYS.remapSlashToFocusSearch]: remapSlashToFocusSearch.checked,
     [STORAGE_KEYS.googleMapsLinkInInfoPanel]: googleMapsLinkInInfoPanel.checked,
+    [STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel]: googleMapsEmbedInsteadOfOsmInInfoPanel.checked,
   };
 
   chrome.storage.sync.set(payload, () => {

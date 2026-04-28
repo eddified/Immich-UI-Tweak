@@ -94,3 +94,26 @@
   line-height: 0;
   object-fit: contain;
 }
+
+/* Replace Immich map (OSM tiles) with embedded Google Map */
+#detail-panel div.h-90.immich-ui-tweak-google-maps-embed-host {
+  position: relative;
+}
+
+#detail-panel div.h-90.immich-ui-tweak-google-maps-embed-host > :not([data-immich-ui-tweak-google-maps-embed]) {
+  display: none !important;
+}
+
+.immich-ui-tweak-google-maps-embed-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  box-sizing: border-box;
+}
+
+.immich-ui-tweak-google-maps-embed-iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}

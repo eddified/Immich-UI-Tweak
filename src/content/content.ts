@@ -111,6 +111,7 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
       STORAGE_KEYS.autoOpenFileLocation,
       STORAGE_KEYS.remapSlashToFocusSearch,
       STORAGE_KEYS.googleMapsLinkInInfoPanel,
+      STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel,
     ],
     (sync) => {
       const enabledUrls = Array.isArray(sync[STORAGE_KEYS.enabledUrls])
@@ -144,6 +145,10 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
         typeof sync[STORAGE_KEYS.googleMapsLinkInInfoPanel] === 'boolean'
           ? (sync[STORAGE_KEYS.googleMapsLinkInInfoPanel] as boolean)
           : DEFAULT_SETTINGS.googleMapsLinkInInfoPanel;
+      const googleMapsEmbedInsteadOfOsmInInfoPanel =
+        typeof sync[STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel] === 'boolean'
+          ? (sync[STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel] as boolean)
+          : DEFAULT_SETTINGS.googleMapsEmbedInsteadOfOsmInInfoPanel;
       cb({
         enabledUrls: enabledUrls.slice(0, 32),
         pathMappings,
@@ -153,6 +158,7 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
         autoOpenFileLocation,
         remapSlashToFocusSearch,
         googleMapsLinkInInfoPanel,
+        googleMapsEmbedInsteadOfOsmInInfoPanel,
       });
     },
   );
@@ -197,6 +203,7 @@ function scheduleDomUpdate(): void {
       }
     }
     updateGoogleMapsLinkInDetailPanel();
+    updateGoogleMapsEmbedInDetailPanel();
   });
 }
 
@@ -220,6 +227,16 @@ function shouldShowUploaderOverlay(ownerId: string): boolean {
   return true;
 }
 
+const GOOGLE_MAPS_EMBED_ATTR = 'data-immich-ui-tweak-google-maps-embed';
+const GOOGLE_MAPS_EMBED_HOST_CLASS = 'immich-ui-tweak-google-maps-embed-host';
+
+function removeGoogleMapsEmbedElements(): void {
+  document.querySelectorAll(`[${GOOGLE_MAPS_EMBED_ATTR}]`).forEach((el) => el.remove());
+  document.querySelectorAll<HTMLElement>(`.${GOOGLE_MAPS_EMBED_HOST_CLASS}`).forEach((el) => {
+    el.classList.remove(GOOGLE_MAPS_EMBED_HOST_CLASS);
+  });
+}
+
 function removeExtensionElements(): void {
   userByOwnerId.clear();
   userFetchInflight.clear();
@@ -235,6 +252,7 @@ function removeExtensionElements(): void {
   document.querySelectorAll('.immich-ui-tweak-uploader-overlay').forEach((el) => el.remove());
   document.querySelectorAll('.immich-ui-tweak-viewer-avatar').forEach((el) => el.remove());
   document.querySelectorAll('[data-immich-ui-tweak-google-maps-row]').forEach((el) => el.remove());
+  removeGoogleMapsEmbedElements();
   document.querySelectorAll('[data-asset].immich-ui-tweak-thumb-anchor').forEach((el) => {
     el.classList.remove('immich-ui-tweak-thumb-anchor');
   });
@@ -599,10 +617,17 @@ function scheduleAssetDetailFetchIfMissing(assetId: string): void {
     typeof row?.longitude === 'number' &&
     Number.isFinite(row.latitude) &&
     Number.isFinite(row.longitude);
-  /* Do not stop at path-only rows when we still need GPS for the Google Maps row. */
+  /* Do not stop at path-only rows when we still need GPS for the Google Maps row or embed. */
   if (hasPath && hasGps) return;
-  if (hasPath && !settings.googleMapsLinkInInfoPanel) return;
-  if (hasPath && !hasGps && settings.googleMapsLinkInInfoPanel && assetGpsLookupExhausted.has(key)) return;
+  if (hasPath && !settings.googleMapsLinkInInfoPanel && !settings.googleMapsEmbedInsteadOfOsmInInfoPanel) return;
+  if (
+    hasPath &&
+    !hasGps &&
+    (settings.googleMapsLinkInInfoPanel || settings.googleMapsEmbedInsteadOfOsmInInfoPanel) &&
+    assetGpsLookupExhausted.has(key)
+  ) {
+    return;
+  }
   if (assetDetailFetchInflight.has(key)) return;
   const inflight = (async () => {
     try {
@@ -642,7 +667,7 @@ function scheduleAssetDetailFetchIfMissing(assetId: string): void {
         typeof after?.longitude === 'number' &&
         Number.isFinite(after.latitude) &&
         Number.isFinite(after.longitude);
-      if (snap.googleMapsLinkInInfoPanel && pathNow && !gpsNow) {
+      if ((snap.googleMapsLinkInInfoPanel || snap.googleMapsEmbedInsteadOfOsmInInfoPanel) && pathNow && !gpsNow) {
         assetGpsLookupExhausted.add(key);
       }
     }
@@ -1053,6 +1078,90 @@ function updateGoogleMapsLinkInDetailPanel(): void {
   }
 }
 
+function googleMapsEmbedIframeSrc(lat: number, lng: number): string {
+  const q = `${lat},${lng}`;
+  return `https://www.google.com/maps?q=${encodeURIComponent(q)}&z=14&output=embed`;
+}
+
+function updateGoogleMapsEmbedInDetailPanel(): void {
+  if (!settingsHydrated || !settings.googleMapsEmbedInsteadOfOsmInInfoPanel) {
+    removeGoogleMapsEmbedElements();
+    return;
+  }
+  if (!isUrlEnabled(location.href, settings.enabledUrls)) {
+    removeGoogleMapsEmbedElements();
+    return;
+  }
+
+  const panel = document.getElementById('detail-panel');
+  if (!panel) {
+    removeGoogleMapsEmbedElements();
+    return;
+  }
+
+  const assetId = parseAssetIdFromHref()?.toLowerCase();
+  const detail = assetId ? assetApiDetailById.get(assetId) : undefined;
+  const lat = detail?.latitude;
+  const lng = detail?.longitude;
+  const validGps =
+    typeof lat === 'number' &&
+    typeof lng === 'number' &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng);
+
+  if (!assetId || !validGps) {
+    panel.querySelectorAll(`[${GOOGLE_MAPS_EMBED_ATTR}]`).forEach((el) => el.remove());
+    panel.querySelectorAll<HTMLElement>(`.${GOOGLE_MAPS_EMBED_HOST_CLASS}`).forEach((el) => {
+      el.classList.remove(GOOGLE_MAPS_EMBED_HOST_CLASS);
+    });
+    return;
+  }
+
+  const host =
+    panel.querySelector<HTMLElement>(':scope > div.h-90') ??
+    panel.querySelector<HTMLElement>(':scope div.h-90');
+  if (!host?.isConnected) {
+    panel.querySelectorAll(`[${GOOGLE_MAPS_EMBED_ATTR}]`).forEach((el) => el.remove());
+    panel.querySelectorAll<HTMLElement>(`.${GOOGLE_MAPS_EMBED_HOST_CLASS}`).forEach((el) => {
+      el.classList.remove(GOOGLE_MAPS_EMBED_HOST_CLASS);
+    });
+    return;
+  }
+
+  const src = googleMapsEmbedIframeSrc(lat, lng);
+  const existing = host.querySelector<HTMLElement>(`[${GOOGLE_MAPS_EMBED_ATTR}]`);
+  if (existing?.dataset.immichUiTweakGoogleMapsEmbedAsset === assetId) {
+    const iframe = existing.querySelector<HTMLIFrameElement>('iframe');
+    if (iframe?.getAttribute('src') === src) {
+      host.classList.add(GOOGLE_MAPS_EMBED_HOST_CLASS);
+      return;
+    }
+  }
+
+  for (const el of document.querySelectorAll<HTMLElement>(`[${GOOGLE_MAPS_EMBED_ATTR}]`)) {
+    el.remove();
+  }
+  for (const el of document.querySelectorAll<HTMLElement>(`.${GOOGLE_MAPS_EMBED_HOST_CLASS}`)) {
+    el.classList.remove(GOOGLE_MAPS_EMBED_HOST_CLASS);
+  }
+
+  const wrap = document.createElement('div');
+  wrap.setAttribute(GOOGLE_MAPS_EMBED_ATTR, '');
+  wrap.className = 'immich-ui-tweak-google-maps-embed-wrap';
+  wrap.dataset.immichUiTweakGoogleMapsEmbedAsset = assetId;
+
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('data-testid', 'immich-ui-tweak-google-maps-embed-iframe');
+  iframe.title = 'Google Maps';
+  iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+  iframe.loading = 'lazy';
+  iframe.className = 'immich-ui-tweak-google-maps-embed-iframe';
+  iframe.src = src;
+  wrap.appendChild(iframe);
+  host.appendChild(wrap);
+  host.classList.add(GOOGLE_MAPS_EMBED_HOST_CLASS);
+}
+
 window.addEventListener('message', (event) => {
   if (event.source !== window) return;
   const d = event.data as {
@@ -1134,7 +1243,10 @@ mo.observe(document.documentElement, { subtree: true, childList: true, character
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'sync') return;
-  if (changes[STORAGE_KEYS.googleMapsLinkInInfoPanel]?.newValue === true) {
+  if (
+    changes[STORAGE_KEYS.googleMapsLinkInInfoPanel]?.newValue === true ||
+    changes[STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel]?.newValue === true
+  ) {
     assetGpsLookupExhausted.clear();
   }
   if (
@@ -1145,7 +1257,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
     changes[STORAGE_KEYS.showOwnProfileIcon] ||
     changes[STORAGE_KEYS.autoOpenFileLocation] ||
     changes[STORAGE_KEYS.remapSlashToFocusSearch] ||
-    changes[STORAGE_KEYS.googleMapsLinkInInfoPanel]
+    changes[STORAGE_KEYS.googleMapsLinkInInfoPanel] ||
+    changes[STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel]
   ) {
     readSettingsFromStorage((s) => {
       settings = s;
