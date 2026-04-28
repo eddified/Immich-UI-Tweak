@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   folderPageHrefFromOrigin,
   parentDirForImmichFolderQuery,
+  parseExifLatLngFromAssetJson,
   parseOriginalPathFromAssetJson,
   parseOwnerIdFromAssetJson,
 } from '../../src/shared/asset-original-path';
@@ -46,5 +47,35 @@ describe('parseOwnerIdFromAssetJson', () => {
 
   it('unwraps data wrapper', () => {
     expect(parseOwnerIdFromAssetJson({ data: { ownerId: 'a' } })).toBe('a');
+  });
+});
+
+describe('parseExifLatLngFromAssetJson', () => {
+  it('reads exifInfo latitude and longitude', () => {
+    expect(
+      parseExifLatLngFromAssetJson({
+        exifInfo: { latitude: 48.8566, longitude: 2.3522 },
+      }),
+    ).toEqual({ lat: 48.8566, lng: 2.3522 });
+  });
+
+  it('returns null when exif missing', () => {
+    expect(parseExifLatLngFromAssetJson({ ownerId: 'a' })).toBeNull();
+  });
+
+  it('unwraps data wrapper', () => {
+    expect(
+      parseExifLatLngFromAssetJson({
+        data: { exifInfo: { latitude: 1, longitude: 2 } },
+      }),
+    ).toEqual({ lat: 1, lng: 2 });
+  });
+
+  it('coerces string coordinates', () => {
+    expect(
+      parseExifLatLngFromAssetJson({
+        exifInfo: { latitude: '48.8566', longitude: '2.3522' },
+      }),
+    ).toEqual({ lat: 48.8566, lng: 2.3522 });
   });
 });

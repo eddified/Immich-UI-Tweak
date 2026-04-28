@@ -18,6 +18,7 @@ const showOwnProfileIcon = document.getElementById('show-own-profile-icon') as H
 const replaceFoldersPageNames = document.getElementById('replace-folders-page-names') as HTMLInputElement;
 const autoOpenFileLocation = document.getElementById('auto-open-file-location') as HTMLInputElement;
 const remapSlashToFocusSearch = document.getElementById('remap-slash-to-focus-search') as HTMLInputElement;
+const googleMapsLinkInInfoPanel = document.getElementById('google-maps-link-info-panel') as HTMLInputElement;
 const saveStatus = document.getElementById('save-status') as HTMLParagraphElement;
 const appVersion = document.getElementById('app-version') as HTMLSpanElement;
 appVersion.textContent = `Version ${chrome.runtime.getManifest().version}`;
@@ -105,6 +106,7 @@ function render(settings: ExtensionSettings): void {
   replaceFoldersPageNames.checked = settings.replaceFoldersPageNames;
   autoOpenFileLocation.checked = settings.autoOpenFileLocation;
   remapSlashToFocusSearch.checked = settings.remapSlashToFocusSearch;
+  googleMapsLinkInInfoPanel.checked = settings.googleMapsLinkInInfoPanel;
   syncOwnProfileCheckboxEnabled();
 }
 
@@ -118,6 +120,7 @@ function load(): void {
       STORAGE_KEYS.showOwnProfileIcon,
       STORAGE_KEYS.autoOpenFileLocation,
       STORAGE_KEYS.remapSlashToFocusSearch,
+      STORAGE_KEYS.googleMapsLinkInInfoPanel,
     ],
     (sync) => {
       const settings: ExtensionSettings = {
@@ -148,6 +151,10 @@ function load(): void {
           typeof sync[STORAGE_KEYS.remapSlashToFocusSearch] === 'boolean'
             ? (sync[STORAGE_KEYS.remapSlashToFocusSearch] as boolean)
             : DEFAULT_SETTINGS.remapSlashToFocusSearch,
+        googleMapsLinkInInfoPanel:
+          typeof sync[STORAGE_KEYS.googleMapsLinkInInfoPanel] === 'boolean'
+            ? (sync[STORAGE_KEYS.googleMapsLinkInInfoPanel] as boolean)
+            : DEFAULT_SETTINGS.googleMapsLinkInInfoPanel,
       };
       const empty = Object.keys(sync).length === 0;
       if (empty) {
@@ -159,6 +166,7 @@ function load(): void {
           [STORAGE_KEYS.showOwnProfileIcon]: DEFAULT_SETTINGS.showOwnProfileIcon,
           [STORAGE_KEYS.autoOpenFileLocation]: DEFAULT_SETTINGS.autoOpenFileLocation,
           [STORAGE_KEYS.remapSlashToFocusSearch]: DEFAULT_SETTINGS.remapSlashToFocusSearch,
+          [STORAGE_KEYS.googleMapsLinkInInfoPanel]: DEFAULT_SETTINGS.googleMapsLinkInInfoPanel,
         });
         render(DEFAULT_SETTINGS);
       } else {
@@ -199,6 +207,7 @@ function save(): void {
     [STORAGE_KEYS.showOwnProfileIcon]: showOwnProfileIcon.checked,
     [STORAGE_KEYS.autoOpenFileLocation]: autoOpenFileLocation.checked,
     [STORAGE_KEYS.remapSlashToFocusSearch]: remapSlashToFocusSearch.checked,
+    [STORAGE_KEYS.googleMapsLinkInInfoPanel]: googleMapsLinkInInfoPanel.checked,
   };
 
   chrome.storage.sync.set(payload, () => {

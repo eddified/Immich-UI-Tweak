@@ -1,5 +1,9 @@
 import { parseCurrentUserIdFromMeJson } from './shared/immich-user';
-import { parseOriginalPathFromAssetJson, parseOwnerIdFromAssetJson } from './shared/asset-original-path';
+import {
+  parseExifLatLngFromAssetJson,
+  parseOriginalPathFromAssetJson,
+  parseOwnerIdFromAssetJson,
+} from './shared/asset-original-path';
 import { DEFAULT_SETTINGS, STORAGE_KEYS } from './shared/storage-types';
 import { enabledUrlsToMatchPatterns } from './shared/url-match';
 
@@ -172,10 +176,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (raw && 'ok' in raw && raw.ok && 'body' in raw) {
           const ownerId = parseOwnerIdFromAssetJson(raw.body);
           const originalPath = parseOriginalPathFromAssetJson(raw.body);
+          const ll = parseExifLatLngFromAssetJson(raw.body);
           sendResponse({
             ok: Boolean(ownerId && originalPath),
             ownerId: ownerId ?? null,
             originalPath: originalPath ?? null,
+            latitude: ll?.lat ?? null,
+            longitude: ll?.lng ?? null,
           });
         } else {
           sendResponse({ ok: false });

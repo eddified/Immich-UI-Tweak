@@ -1,4 +1,5 @@
 import {
+  parseExifLatLngFromAssetJson,
   parseOriginalPathFromAssetJson,
   parseOwnerIdFromAssetJson,
 } from '../shared/asset-original-path';
@@ -62,7 +63,10 @@ function emitAssetDetailFromResponse(urlStr: string, body: unknown): void {
     const assetId = m[1].toLowerCase();
     const ownerId = parseOwnerIdFromAssetJson(body);
     const originalPath = parseOriginalPathFromAssetJson(body);
-    if (!ownerId && !originalPath) return;
+    const ll = parseExifLatLngFromAssetJson(body);
+    if (!ownerId && !originalPath && !ll) return;
+    const latitude = ll ? ll.lat : null;
+    const longitude = ll ? ll.lng : null;
     window.postMessage(
       {
         source: MSG_SOURCE,
@@ -70,6 +74,8 @@ function emitAssetDetailFromResponse(urlStr: string, body: unknown): void {
         assetId,
         ownerId,
         originalPath,
+        latitude,
+        longitude,
       },
       '*',
     );

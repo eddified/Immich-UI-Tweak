@@ -6,6 +6,8 @@ export const STORAGE_KEYS = {
   showOwnProfileIcon: 'showOwnProfileIcon',
   autoOpenFileLocation: 'autoOpenFileLocation',
   remapSlashToFocusSearch: 'remapSlashToFocusSearch',
+  /** When true, show a Google Maps link (lat/lng) above the map in the asset info panel. */
+  googleMapsLinkInInfoPanel: 'googleMapsLinkInInfoPanel',
 } as const;
 
 export const MAX_ENABLED_URLS = 32;
@@ -26,6 +28,8 @@ export interface ExtensionSettings {
   autoOpenFileLocation: boolean;
   /** When true, `/` focuses the navbar search instead of opening Immich's command palette. */
   remapSlashToFocusSearch: boolean;
+  /** When true, inject a Google Maps deep link above the map in the photo info panel when GPS exists. */
+  googleMapsLinkInInfoPanel: boolean;
 }
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
@@ -36,4 +40,5 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   showOwnProfileIcon: false,
   autoOpenFileLocation: true,
   remapSlashToFocusSearch: true,
+  googleMapsLinkInInfoPanel: true,
 };

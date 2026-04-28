@@ -11,6 +11,7 @@ import {
 import { profileImageAbsoluteUrl, resolveImmichUsersApiBase } from '../shared/profile-image';
 import {
   folderPageHref,
+  parseExifLatLngFromAssetJson,
   parseOriginalPathFromAssetJson,
   parseOwnerIdFromAssetJson,
 } from '../shared/asset-original-path';
@@ -38,7 +39,17 @@ const MSG_CURRENT_USER = 'currentUser';
 const MSG_ASSET_DETAIL = 'assetDetail';
 const MSG_USER_DETAIL = 'userDetail';
 
-type AssetApiDetail = { ownerId: string | null; originalPath: string | null };
+type AssetApiDetail = {
+  ownerId: string | null;
+  originalPath: string | null;
+  latitude: number | null;
+  longitude: number | null;
+};
+
+function emptyAssetDetail(): AssetApiDetail {
+  return { ownerId: null, originalPath: null, latitude: null, longitude: null };
+}
+
 /** Latest GET /api/assets/:id body fields from the page's own fetch (main world). */
 const assetApiDetailById = new Map<string, AssetApiDetail>();
 
@@ -73,6 +84,11 @@ const userFetchInflight = new Map<string, Promise<ImmichUserPublic | null>>();
 const partnerPathInflight = new Map<string, Promise<void>>();
 /** Fill `assetApiDetailById` when the URL already changed but the fetch hook has not posted yet. */
 const assetDetailFetchInflight = new Map<string, Promise<void>>();
+/**
+ * After a GET /api/assets/:id backfill still left no GPS, avoid refetching every animation frame
+ * when the Google Maps row is enabled.
+ */
+const assetGpsLookupExhausted = new Set<string>();
 /** Asset ids where GET /api/assets confirmed the current user is the owner — skip inject (use Immich toggle). */
 const pathInjectionUseNativeOnly = new Set<string>();
 /** Partner `originalPath` waiting for `#detail-panel` filename row to exist (cold loads). */
@@ -94,6 +110,7 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
       STORAGE_KEYS.showOwnProfileIcon,
       STORAGE_KEYS.autoOpenFileLocation,
       STORAGE_KEYS.remapSlashToFocusSearch,
+      STORAGE_KEYS.googleMapsLinkInInfoPanel,
     ],
     (sync) => {
       const enabledUrls = Array.isArray(sync[STORAGE_KEYS.enabledUrls])
@@ -123,6 +140,10 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
         typeof sync[STORAGE_KEYS.remapSlashToFocusSearch] === 'boolean'
           ? (sync[STORAGE_KEYS.remapSlashToFocusSearch] as boolean)
           : DEFAULT_SETTINGS.remapSlashToFocusSearch;
+      const googleMapsLinkInInfoPanel =
+        typeof sync[STORAGE_KEYS.googleMapsLinkInInfoPanel] === 'boolean'
+          ? (sync[STORAGE_KEYS.googleMapsLinkInInfoPanel] as boolean)
+          : DEFAULT_SETTINGS.googleMapsLinkInInfoPanel;
       cb({
         enabledUrls: enabledUrls.slice(0, 32),
         pathMappings,
@@ -131,6 +152,7 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
         showOwnProfileIcon,
         autoOpenFileLocation,
         remapSlashToFocusSearch,
+        googleMapsLinkInInfoPanel,
       });
     },
   );
@@ -174,6 +196,7 @@ function scheduleDomUpdate(): void {
         setTimeout(() => applyFoldersPathRelabel(snap), 400);
       }
     }
+    updateGoogleMapsLinkInDetailPanel();
   });
 }
 
@@ -205,11 +228,13 @@ function removeExtensionElements(): void {
   pathInjectionUseNativeOnly.clear();
   pendingPartnerPathByAssetId.clear();
   assetApiDetailById.clear();
+  assetGpsLookupExhausted.clear();
   resolveMeUserIdInflight = null;
   sessionUserId = undefined;
 
   document.querySelectorAll('.immich-ui-tweak-uploader-overlay').forEach((el) => el.remove());
   document.querySelectorAll('.immich-ui-tweak-viewer-avatar').forEach((el) => el.remove());
+  document.querySelectorAll('[data-immich-ui-tweak-google-maps-row]').forEach((el) => el.remove());
   document.querySelectorAll('[data-asset].immich-ui-tweak-thumb-anchor').forEach((el) => {
     el.classList.remove('immich-ui-tweak-thumb-anchor');
   });
@@ -469,6 +494,7 @@ function resetFileLocationTrackingIfAssetChanged(): void {
       pathInjectionUseNativeOnly.delete(fileLocationAssetKey);
       pendingPartnerPathByAssetId.delete(fileLocationAssetKey);
       assetApiDetailById.delete(fileLocationAssetKey.toLowerCase());
+      assetGpsLookupExhausted.delete(fileLocationAssetKey.toLowerCase());
     }
     fileLocationAssetKey = key;
     sawPathLinkThisAsset = false;
@@ -513,7 +539,12 @@ function findFilenameRow(panel: HTMLElement): HTMLElement | null {
 /** GET /api/assets/:id in the page main world (same cookies as Immich). Isolated fetch can miss session on cold loads. */
 function fetchAssetViaMainWorld(
   assetId: string,
-): Promise<{ ownerId: string; originalPath: string } | null> {
+): Promise<{
+  ownerId: string;
+  originalPath: string;
+  latitude: number | null;
+  longitude: number | null;
+} | null> {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(
       { type: 'immich-ui-tweak:fetch-asset-main', assetId },
@@ -521,6 +552,8 @@ function fetchAssetViaMainWorld(
         ok?: boolean;
         ownerId?: string | null;
         originalPath?: string | null;
+        latitude?: number | null;
+        longitude?: number | null;
       }) => {
         void chrome.runtime.lastError;
         if (
@@ -530,7 +563,16 @@ function fetchAssetViaMainWorld(
           typeof resp.originalPath === 'string' &&
           resp.originalPath
         ) {
-          resolve({ ownerId: resp.ownerId.toLowerCase(), originalPath: resp.originalPath });
+          const lat =
+            typeof resp.latitude === 'number' && Number.isFinite(resp.latitude) ? resp.latitude : null;
+          const lng =
+            typeof resp.longitude === 'number' && Number.isFinite(resp.longitude) ? resp.longitude : null;
+          resolve({
+            ownerId: resp.ownerId.toLowerCase(),
+            originalPath: resp.originalPath,
+            latitude: lat,
+            longitude: lng,
+          });
         } else resolve(null);
       },
     );
@@ -551,13 +593,27 @@ function linkTextLooksLikeImmichServerPath(text: string, mappings: PathMappingRo
 function scheduleAssetDetailFetchIfMissing(assetId: string): void {
   const key = assetId.toLowerCase();
   const row = assetApiDetailById.get(key);
-  if (typeof row?.originalPath === 'string' && row.originalPath.trim()) return;
+  const hasPath = typeof row?.originalPath === 'string' && Boolean(row.originalPath.trim());
+  const hasGps =
+    typeof row?.latitude === 'number' &&
+    typeof row?.longitude === 'number' &&
+    Number.isFinite(row.latitude) &&
+    Number.isFinite(row.longitude);
+  /* Do not stop at path-only rows when we still need GPS for the Google Maps row. */
+  if (hasPath && hasGps) return;
+  if (hasPath && !settings.googleMapsLinkInInfoPanel) return;
+  if (hasPath && !hasGps && settings.googleMapsLinkInInfoPanel && assetGpsLookupExhausted.has(key)) return;
   if (assetDetailFetchInflight.has(key)) return;
   const inflight = (async () => {
     try {
       const fromMain = await fetchAssetViaMainWorld(assetId);
       if (fromMain) {
-        assetApiDetailById.set(key, { ownerId: fromMain.ownerId, originalPath: fromMain.originalPath });
+        assetApiDetailById.set(key, {
+          ownerId: fromMain.ownerId,
+          originalPath: fromMain.originalPath,
+          latitude: fromMain.latitude,
+          longitude: fromMain.longitude,
+        });
         return;
       }
       const assetUrl = new URL(`/api/assets/${encodeURIComponent(assetId)}`, location.origin);
@@ -568,10 +624,27 @@ function scheduleAssetDetailFetchIfMissing(assetId: string): void {
       const ownerId = parseOwnerIdFromAssetJson(json);
       const originalPath = parseOriginalPathFromAssetJson(json);
       if (ownerId && originalPath) {
-        assetApiDetailById.set(key, { ownerId, originalPath });
+        const ll = parseExifLatLngFromAssetJson(json);
+        assetApiDetailById.set(key, {
+          ownerId,
+          originalPath,
+          latitude: ll?.lat ?? null,
+          longitude: ll?.lng ?? null,
+        });
       }
     } finally {
       assetDetailFetchInflight.delete(key);
+      const snap = settings;
+      const after = assetApiDetailById.get(key);
+      const pathNow = typeof after?.originalPath === 'string' && Boolean(after.originalPath.trim());
+      const gpsNow =
+        typeof after?.latitude === 'number' &&
+        typeof after?.longitude === 'number' &&
+        Number.isFinite(after.latitude) &&
+        Number.isFinite(after.longitude);
+      if (snap.googleMapsLinkInInfoPanel && pathNow && !gpsNow) {
+        assetGpsLookupExhausted.add(key);
+      }
     }
   })();
   assetDetailFetchInflight.set(key, inflight);
@@ -709,7 +782,12 @@ function schedulePartnerPathInjection(panel: HTMLElement, assetId: string): void
           if (fromMain) {
             ownerId = fromMain.ownerId;
             rawPath = fromMain.originalPath;
-            assetApiDetailById.set(keyId, { ownerId, originalPath: rawPath });
+            assetApiDetailById.set(keyId, {
+              ownerId,
+              originalPath: rawPath,
+              latitude: fromMain.latitude,
+              longitude: fromMain.longitude,
+            });
           }
         }
 
@@ -722,7 +800,13 @@ function schedulePartnerPathInjection(panel: HTMLElement, assetId: string): void
           ownerId = parseOwnerIdFromAssetJson(json);
           rawPath = parseOriginalPathFromAssetJson(json);
           if (ownerId && rawPath) {
-            assetApiDetailById.set(keyId, { ownerId, originalPath: rawPath });
+            const ll = parseExifLatLngFromAssetJson(json);
+            assetApiDetailById.set(keyId, {
+              ownerId,
+              originalPath: rawPath,
+              latitude: ll?.lat ?? null,
+              longitude: ll?.lng ?? null,
+            });
           }
         }
 
@@ -873,6 +957,101 @@ function expandAndRewriteFilePath(): void {
   }
 }
 
+const GOOGLE_MAPS_ROW_ATTR = 'data-immich-ui-tweak-google-maps-row';
+
+function googleMapsSearchUrl(lat: number, lng: number): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`;
+}
+
+function formatGoogleMapsCoordLabel(lat: number, lng: number): string {
+  return `${lat.toFixed(7)}, ${lng.toFixed(7)}`;
+}
+
+/** Map pin icon (generic drop shape, bundled SVG string). */
+const MAP_PIN_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg>';
+
+function updateGoogleMapsLinkInDetailPanel(): void {
+  if (!settingsHydrated || !settings.googleMapsLinkInInfoPanel) {
+    document.querySelectorAll(`[${GOOGLE_MAPS_ROW_ATTR}]`).forEach((el) => el.remove());
+    return;
+  }
+  if (!isUrlEnabled(location.href, settings.enabledUrls)) {
+    document.querySelectorAll(`[${GOOGLE_MAPS_ROW_ATTR}]`).forEach((el) => el.remove());
+    return;
+  }
+
+  const panel = document.getElementById('detail-panel');
+  if (!panel) {
+    document.querySelectorAll(`[${GOOGLE_MAPS_ROW_ATTR}]`).forEach((el) => el.remove());
+    return;
+  }
+
+  const assetId = parseAssetIdFromHref()?.toLowerCase();
+  if (!assetId) {
+    panel.querySelectorAll(`[${GOOGLE_MAPS_ROW_ATTR}]`).forEach((el) => el.remove());
+    return;
+  }
+
+  const detail = assetApiDetailById.get(assetId);
+  const lat = detail?.latitude;
+  const lng = detail?.longitude;
+  if (typeof lat !== 'number' || typeof lng !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    panel.querySelectorAll(`[${GOOGLE_MAPS_ROW_ATTR}]`).forEach((el) => el.remove());
+    return;
+  }
+
+  const href = googleMapsSearchUrl(lat, lng);
+  const label = formatGoogleMapsCoordLabel(lat, lng);
+
+  const host =
+    panel.querySelector<HTMLElement>(':scope > div.h-90') ??
+    panel.querySelector<HTMLElement>('div.h-90');
+
+  let wrap = panel.querySelector<HTMLElement>(`[${GOOGLE_MAPS_ROW_ATTR}]`);
+  if (wrap && wrap.dataset.immichUiTweakGoogleMapsAsset === assetId) {
+    const a = wrap.querySelector<HTMLAnchorElement>('[data-testid="immich-ui-tweak-google-maps-link"]');
+    if (a && a.getAttribute('href') === href && (a.textContent ?? '').includes(label)) {
+      /* Map mounts after first paint — move the row above it so the link stays in view. */
+      if (host?.isConnected && wrap.nextElementSibling !== host) {
+        host.insertAdjacentElement('beforebegin', wrap);
+      }
+      return;
+    }
+  }
+  wrap?.remove();
+
+  wrap = document.createElement('div');
+  wrap.setAttribute(GOOGLE_MAPS_ROW_ATTR, '');
+  wrap.className = 'immich-ui-tweak-google-maps-row';
+  wrap.dataset.immichUiTweakGoogleMapsAsset = assetId;
+
+  const a = document.createElement('a');
+  a.href = href;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.setAttribute('data-testid', 'immich-ui-tweak-google-maps-link');
+  a.setAttribute('aria-label', 'Open in Google Maps');
+  a.className = 'immich-ui-tweak-google-maps-link';
+
+  const pinWrap = document.createElement('span');
+  pinWrap.className = 'immich-ui-tweak-google-maps-pin';
+  pinWrap.innerHTML = MAP_PIN_SVG;
+
+  const textSpan = document.createElement('span');
+  textSpan.textContent = label;
+
+  a.append(pinWrap, textSpan);
+  wrap.append(a);
+
+  if (host?.isConnected) {
+    host.insertAdjacentElement('beforebegin', wrap);
+  } else {
+    /* Map hidden or layout changed — still show the link inside the info panel. */
+    panel.appendChild(wrap);
+  }
+}
+
 window.addEventListener('message', (event) => {
   if (event.source !== window) return;
   const d = event.data as {
@@ -883,6 +1062,8 @@ window.addEventListener('message', (event) => {
     assetId?: string;
     ownerId?: string | null;
     originalPath?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
     user?: unknown;
   };
   if (d?.source !== MSG_SOURCE) return;
@@ -904,12 +1085,35 @@ window.addEventListener('message', (event) => {
 
   if (d.type === MSG_ASSET_DETAIL && typeof d.assetId === 'string') {
     const key = d.assetId.toLowerCase();
-    const prev = assetApiDetailById.get(key) ?? { ownerId: null, originalPath: null };
+    const prev = assetApiDetailById.get(key) ?? emptyAssetDetail();
     const nextOwner =
       typeof d.ownerId === 'string' && d.ownerId.trim() ? d.ownerId.toLowerCase() : prev.ownerId;
     const nextPath =
       typeof d.originalPath === 'string' && d.originalPath.trim() ? d.originalPath : prev.originalPath;
-    assetApiDetailById.set(key, { ownerId: nextOwner, originalPath: nextPath });
+    let nextLat = prev.latitude;
+    let nextLng = prev.longitude;
+    if ('latitude' in d) {
+      nextLat =
+        typeof d.latitude === 'number' && Number.isFinite(d.latitude) ? d.latitude : null;
+    }
+    if ('longitude' in d) {
+      nextLng =
+        typeof d.longitude === 'number' && Number.isFinite(d.longitude) ? d.longitude : null;
+    }
+    assetApiDetailById.set(key, {
+      ownerId: nextOwner,
+      originalPath: nextPath,
+      latitude: nextLat,
+      longitude: nextLng,
+    });
+    if (
+      typeof nextLat === 'number' &&
+      typeof nextLng === 'number' &&
+      Number.isFinite(nextLat) &&
+      Number.isFinite(nextLng)
+    ) {
+      assetGpsLookupExhausted.delete(key);
+    }
     scheduleDomUpdate();
     return;
   }
@@ -929,6 +1133,9 @@ mo.observe(document.documentElement, { subtree: true, childList: true, character
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'sync') return;
+  if (changes[STORAGE_KEYS.googleMapsLinkInInfoPanel]?.newValue === true) {
+    assetGpsLookupExhausted.clear();
+  }
   if (
     changes[STORAGE_KEYS.enabledUrls] ||
     changes[STORAGE_KEYS.pathMappings] ||
@@ -936,7 +1143,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
     changes[STORAGE_KEYS.showPartnerIcons] ||
     changes[STORAGE_KEYS.showOwnProfileIcon] ||
     changes[STORAGE_KEYS.autoOpenFileLocation] ||
-    changes[STORAGE_KEYS.remapSlashToFocusSearch]
+    changes[STORAGE_KEYS.remapSlashToFocusSearch] ||
+    changes[STORAGE_KEYS.googleMapsLinkInInfoPanel]
   ) {
     readSettingsFromStorage((s) => {
       settings = s;

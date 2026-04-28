@@ -42,3 +42,32 @@ export function parseOwnerIdFromAssetJson(data: unknown): string | null {
   if (typeof id === 'string' && id.trim()) return id.toLowerCase();
   return null;
 }
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+/** GPS from Immich asset DTO (`exifInfo.latitude` / `longitude`). */
+export function parseExifLatLngFromAssetJson(data: unknown): { lat: number; lng: number } | null {
+  if (data == null || typeof data !== 'object') return null;
+  const o = data as Record<string, unknown>;
+  if ('data' in o && o.data !== undefined) {
+    return parseExifLatLngFromAssetJson(o.data);
+  }
+  const exif = o.exifInfo;
+  if (exif != null && typeof exif === 'object') {
+    const e = exif as Record<string, unknown>;
+    const lat = toFiniteNumber(e.latitude);
+    const lng = toFiniteNumber(e.longitude);
+    if (lat !== null && lng !== null) return { lat, lng };
+  }
+  const latTop = toFiniteNumber(o.latitude);
+  const lngTop = toFiniteNumber(o.longitude);
+  if (latTop !== null && lngTop !== null) return { lat: latTop, lng: lngTop };
+  return null;
+}

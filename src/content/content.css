@@ -65,3 +65,31 @@
   object-fit: cover;
   display: block;
 }
+
+/* Google Maps row above Immich map (detail panel). */
+.immich-ui-tweak-google-maps-row {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.immich-ui-tweak-google-maps-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.immich-ui-tweak-google-maps-link:hover {
+  text-decoration: underline;
+}
+
+.immich-ui-tweak-google-maps-pin {
+  flex-shrink: 0;
+  color: #ef4444;
+  line-height: 0;
+}

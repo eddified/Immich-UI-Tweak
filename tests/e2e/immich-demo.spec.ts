@@ -13,6 +13,9 @@ const PARTNERS = `${DEMO}/partners/743f389e-ee80-4682-8d56-2cd45f692c40`;
 /** Partner Mich asset for cold `/photos/:id` (owner ≠ logged-in demo user); id from partner timeline API. */
 const PARTNER_PHOTO_COLD = `${DEMO}/photos/41908224-87c9-4588-bde1-b89c77f122fd`;
 
+/** Demo asset with GPS in EXIF (for extension Google Maps row). */
+const DEMO_GPS_PHOTO = `${DEMO}/photos/cbd3d4ce-859c-4c70-9077-56bb2547b04e`;
+
 /**
  * Default demo mapping (`applyDemoExtensionSettings`): `/data/upload` → `/var/test`.
  * Immich original paths look like: `/data/upload/<library-uuid>/<hh>/<hh>/<asset-uuid>.<ext>`
@@ -393,6 +396,61 @@ test.describe('Immich demo (extension loaded)', () => {
         return '';
       }, { timeout: 25_000, intervals: [100, 200, 400, 600, 800] })
       .toMatch(/^\/z(\/|$)/);
+  });
+
+  test('info panel: Google Maps link for GPS photo', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await saveExtensionOptions(page, extensionId);
+    await page.close();
+
+    const appPage = await context.newPage();
+    await loginDemoImmich(appPage);
+
+    await appPage.goto(DEMO_GPS_PHOTO, { waitUntil: 'load', timeout: 60_000 });
+    await appPage.locator('[data-testid="asset-viewer-navbar-actions"]').waitFor({
+      state: 'visible',
+      timeout: 30_000,
+    });
+    await ensureAssetViewerDetailPanelOpen(appPage);
+
+    const link = appPage.getByTestId('immich-ui-tweak-google-maps-link');
+    await expect(link).toBeAttached({ timeout: 30_000 });
+    await link.scrollIntoViewIfNeeded();
+    await expect(link).toBeVisible({ timeout: 10_000 });
+    const href = await link.getAttribute('href');
+    expect(href).toBeTruthy();
+    const u = new URL(href!);
+    expect(u.hostname.endsWith('google.com')).toBe(true);
+    expect(u.pathname.includes('/maps')).toBe(true);
+    const q = u.searchParams.get('query');
+    expect(q).toBeTruthy();
+    expect(q).toMatch(/^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/);
+  });
+
+  test('info panel: Google Maps link hidden when extension option off', async ({ context, extensionId }) => {
+    const optPage = await context.newPage();
+    await optPage.goto(`chrome-extension://${extensionId}/options.html`);
+    await optPage.locator('#show-partner-icons').setChecked(true);
+    await optPage.locator('#url-list input').first().fill(`${demoOrigin()}/`);
+    const row = optPage.locator('#mapping-body tr').first();
+    await row.locator('input').nth(0).fill('/var/test');
+    await row.locator('input').nth(1).fill('/data/upload');
+    await optPage.locator('#replace-folders-page-names').setChecked(true);
+    await optPage.locator('#google-maps-link-info-panel').setChecked(false);
+    await optPage.locator('#save').click();
+    await optPage.locator('#save-status').filter({ hasText: /Saved/i }).waitFor({ state: 'visible', timeout: 5_000 });
+    await optPage.close();
+
+    const appPage = await context.newPage();
+    await loginDemoImmich(appPage);
+    await appPage.goto(DEMO_GPS_PHOTO, { waitUntil: 'load', timeout: 60_000 });
+    await appPage.locator('[data-testid="asset-viewer-navbar-actions"]').waitFor({
+      state: 'visible',
+      timeout: 30_000,
+    });
+    await ensureAssetViewerDetailPanelOpen(appPage);
+
+    await expect(appPage.getByTestId('immich-ui-tweak-google-maps-link')).toHaveCount(0);
   });
 
   test('info panel: file path stays hidden after user toggles it off', async ({ context, extensionId }) => {
