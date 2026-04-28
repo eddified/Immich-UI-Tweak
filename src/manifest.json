@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Immich UI Tweak",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Partner avatars and Docker path mapping for Immich web.",
   "permissions": ["storage", "scripting"],
   "host_permissions": ["http://*/*", "https://*/*"],
