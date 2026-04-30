@@ -189,7 +189,7 @@ function clearToolbar(container: HTMLElement): void {
     const tw = n as ToolbarWithExpandPtr;
     const h = tw.__immichUiTweakToolbarExpandPtr;
     if (h) {
-      n.removeEventListener('pointerdown', h, true);
+      n.removeEventListener('click', h, true);
       delete tw.__immichUiTweakToolbarExpandPtr;
     }
     n.remove();
@@ -229,27 +229,27 @@ function applySecondColumnSoftHide(second: HTMLElement): void {
 
 type ColumnWithToggle = HTMLElement & {
   __immichUiTweakColToggle?: (e: Event) => void;
-  /** Capture-phase pointerdown on the icon column so expand works before events enter closed shadow roots. */
-  __immichUiTweakExpandColPtr?: (e: PointerEvent) => void;
+  /** Capture-phase click on the icon column so expand matches native button timing (mouseup). */
+  __immichUiTweakExpandColPtr?: (e: MouseEvent) => void;
 };
 
 type ToolbarWithExpandPtr = HTMLElement & {
-  __immichUiTweakToolbarExpandPtr?: (e: PointerEvent) => void;
+  __immichUiTweakToolbarExpandPtr?: (e: MouseEvent) => void;
 };
 
 function clearExpandColumnPointer(el: HTMLElement): void {
   const col = el as ColumnWithToggle;
   const h = col.__immichUiTweakExpandColPtr;
   if (h) {
-    el.removeEventListener('pointerdown', h, true);
+    el.removeEventListener('click', h, true);
     delete col.__immichUiTweakExpandColPtr;
   }
 }
 
-/** Intercept on the column (capture, pointerdown) before the event reaches shadow-internal targets. */
-function bindExpandColumnPointerCapture(col: HTMLElement, kind: DetailRowKind): void {
+/** Intercept on the column (capture, click) as a fallback when retargeting hides our overlay from composedPath(). */
+function bindExpandColumnClickCapture(col: HTMLElement, kind: DetailRowKind): void {
   clearExpandColumnPointer(col);
-  const h = (e: PointerEvent): void => {
+  const h = (e: MouseEvent): void => {
     if (!pointerGate() || !userToggleHandler) return;
     if (e.button !== 0) return;
     e.preventDefault();
@@ -257,7 +257,7 @@ function bindExpandColumnPointerCapture(col: HTMLElement, kind: DetailRowKind): 
     userToggleHandler(kind, false);
   };
   (col as ColumnWithToggle).__immichUiTweakExpandColPtr = h;
-  col.addEventListener('pointerdown', h, true);
+  col.addEventListener('click', h, true);
 }
 
 function clearColumnToggleHandlers(el: HTMLElement): void {
@@ -374,7 +374,7 @@ function svgIconButton(kind: DetailRowKind, action: 'expand' | 'collapse', sizeP
   const pathD =
     kind === 'file' ? MDI_IMAGE_OUTLINE : kind === 'camera' ? MDI_CAMERA : MDI_CAMERA_IRIS;
   btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${sizePx}" height="${sizePx}" aria-hidden="true"><path fill="currentColor" d="${pathD}"/></svg>`;
-  /* Expand taps use global activation + (merged strip) toolbar capture pointerdown. */
+  /* Expand taps use global activation + (merged strip) toolbar capture click. */
   btn.querySelector('svg')?.style.setProperty('pointer-events', 'none');
   return btn;
 }
@@ -409,7 +409,7 @@ function decorateIconColumn(
     col.removeAttribute('aria-label');
     col.style.cursor = '';
     addExpandHitOverlay(col, kind);
-    bindExpandColumnPointerCapture(col, kind);
+    bindExpandColumnClickCapture(col, kind);
     return;
   }
 
@@ -477,8 +477,8 @@ function composedPathTouchesDetailPanel(path: EventTarget[]): boolean {
 
 /**
  * Clicks on shadow-internal icons never include our sibling overlay button in `composedPath()`.
- * Isolated rows use capture `pointerdown` on the icon column; this covers toolbar + overlay hits
- * and keyboard-activated `click` on real buttons.
+ * Isolated rows use capture `click` on the icon column as a fallback; `elementsFromPoint` covers
+ * toolbar + overlay hits; keyboard still delivers `click` on real buttons.
  */
 function handleGlobalExpandActivation(ev: MouseEvent | PointerEvent): void {
   if (!pointerGate() || !userToggleHandler) return;
@@ -507,7 +507,6 @@ function ensureGlobalExpandClick(): void {
   if (globalExpandClickInstalled) return;
   globalExpandClickInstalled = true;
   window.addEventListener('click', handleGlobalExpandActivation, true);
-  window.addEventListener('pointerdown', handleGlobalExpandActivation, true);
 }
 
 /**
@@ -665,7 +664,7 @@ export function applyInfoPanelDetailRows(
     for (let k = run.start; k <= run.end; k++) {
       bar.appendChild(svgIconButton(items[k].kind, 'expand', stripIconPx));
     }
-    const toolbarPd = (e: PointerEvent): void => {
+    const toolbarExpandClick = (e: MouseEvent): void => {
       if (!pointerGate() || !userToggleHandler) return;
       if (e.button !== 0) return;
       const t = e.target;
@@ -678,8 +677,8 @@ export function applyInfoPanelDetailRows(
       e.stopImmediatePropagation();
       userToggleHandler(rowKind, false);
     };
-    (bar as ToolbarWithExpandPtr).__immichUiTweakToolbarExpandPtr = toolbarPd;
-    bar.addEventListener('pointerdown', toolbarPd, true);
+    (bar as ToolbarWithExpandPtr).__immichUiTweakToolbarExpandPtr = toolbarExpandClick;
+    bar.addEventListener('click', toolbarExpandClick, true);
     const anchor = items[run.start].el;
     anchor.parentElement?.insertBefore(bar, anchor);
   }
