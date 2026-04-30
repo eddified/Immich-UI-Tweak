@@ -25,12 +25,21 @@ import {
 } from '../shared/path-mapping';
 import {
   DEFAULT_SETTINGS,
+  readDetailRowPanelModeForKind,
   STORAGE_KEYS,
+  type DetailRowKind,
+  type DetailRowsExplicit,
   type ExtensionSettings,
   type PathMappingRow,
 } from '../shared/storage-types';
 import { isUrlEnabled } from '../shared/url-match';
 import { applyFoldersPathRelabel } from './folders-path-relabel';
+import {
+  applyInfoPanelDetailRows,
+  cleanupDetailPanelDetailRowsInDocument,
+  setDetailRowPointerGate,
+  setDetailRowUserToggleHandler,
+} from './info-panel-detail-rows';
 import { installSlashFocusSearch } from './slash-focus-search';
 
 const MSG_SOURCE = 'immich-ui-tweak';
@@ -64,6 +73,11 @@ const SHOW_FILE_LOCATION_LABELS = [
 let settings: ExtensionSettings = { ...DEFAULT_SETTINGS };
 /** False until `chrome.storage.sync` returns — avoids treating default `enabledUrls` as real and wiping state. */
 let settingsHydrated = false;
+/**
+ * Session-only per-row collapse overrides after toggles in the viewer (same lifetime as `userDismissedPathThisAsset`:
+ * survives prev/next asset, resets on full reload, detail panel remount, or when collapse defaults change in sync).
+ */
+let detailRowsSessionExplicit: DetailRowsExplicit = {};
 /** Detail panel file path: avoid re-clicking "show file location" after the user hides the path (runs every rAF). */
 let detailPanelMounted = false;
 /** When Immich mounts duplicate asset viewers (e.g. map + timeline), the active `#detail-panel` element changes — reset auto-expand state. */
@@ -114,8 +128,15 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
       STORAGE_KEYS.remapSlashToFocusSearch,
       STORAGE_KEYS.googleMapsLinkInInfoPanel,
       STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel,
+      STORAGE_KEYS.infoPanelDetailRowFile,
+      STORAGE_KEYS.infoPanelDetailRowCamera,
+      STORAGE_KEYS.infoPanelDetailRowLens,
+      'infoPanelDefaultCollapseFileRow',
+      'infoPanelDefaultCollapseCameraRow',
+      'infoPanelDefaultCollapseLensRow',
     ],
     (sync) => {
+      const syncRec = sync as Record<string, unknown>;
       const enabledUrls = Array.isArray(sync[STORAGE_KEYS.enabledUrls])
         ? (sync[STORAGE_KEYS.enabledUrls] as string[])
         : DEFAULT_SETTINGS.enabledUrls;
@@ -151,6 +172,9 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
         typeof sync[STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel] === 'boolean'
           ? (sync[STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel] as boolean)
           : DEFAULT_SETTINGS.googleMapsEmbedInsteadOfOsmInInfoPanel;
+      const infoPanelDetailRowFile = readDetailRowPanelModeForKind(syncRec, 'file');
+      const infoPanelDetailRowCamera = readDetailRowPanelModeForKind(syncRec, 'camera');
+      const infoPanelDetailRowLens = readDetailRowPanelModeForKind(syncRec, 'lens');
       cb({
         enabledUrls: enabledUrls.slice(0, 32),
         pathMappings,
@@ -161,6 +185,9 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
         remapSlashToFocusSearch,
         googleMapsLinkInInfoPanel,
         googleMapsEmbedInsteadOfOsmInInfoPanel,
+        infoPanelDetailRowFile,
+        infoPanelDetailRowCamera,
+        infoPanelDetailRowLens,
       });
     },
   );
@@ -180,6 +207,30 @@ function requestMainWorldInject(): void {
  */
 requestMainWorldInject();
 
+const DOM_UPDATE_MO_OPTIONS = { subtree: true, childList: true, characterData: true } as const;
+
+function runScheduledDomPass(): void {
+  syncSessionUserIdFromNavbar();
+  updateThumbnailOverlays();
+  updateViewerOverlay();
+  expandAndRewriteFilePath();
+  document.querySelectorAll('#detail-panel').forEach((el) => {
+    if (el instanceof HTMLElement) applyInfoPanelDetailRows(el, settings, detailRowsSessionExplicit);
+  });
+  if (settings.replaceFoldersPageNames) {
+    applyFoldersPathRelabel(settings);
+    /* Svelte can overwrite folder labels after our rAF; re-apply on the next task and after layout. */
+    const snap = settings;
+    if (location.pathname === '/folders' || location.pathname.startsWith('/folders/')) {
+      queueMicrotask(() => applyFoldersPathRelabel(snap));
+      setTimeout(() => applyFoldersPathRelabel(snap), 0);
+      setTimeout(() => applyFoldersPathRelabel(snap), 400);
+    }
+  }
+  updateGoogleMapsLinkInDetailPanel();
+  updateGoogleMapsEmbedInDetailPanel();
+}
+
 function scheduleDomUpdate(): void {
   if (!settingsHydrated) return;
   if (rafScheduled) return;
@@ -190,24 +241,17 @@ function scheduleDomUpdate(): void {
       removeExtensionElements();
       return;
     }
-    syncSessionUserIdFromNavbar();
-    updateThumbnailOverlays();
-    updateViewerOverlay();
-    expandAndRewriteFilePath();
-    if (settings.replaceFoldersPageNames) {
-      applyFoldersPathRelabel(settings);
-      /* Svelte can overwrite folder labels after our rAF; re-apply on the next task and after layout. */
-      const snap = settings;
-      if (location.pathname === '/folders' || location.pathname.startsWith('/folders/')) {
-        queueMicrotask(() => applyFoldersPathRelabel(snap));
-        setTimeout(() => applyFoldersPathRelabel(snap), 0);
-        setTimeout(() => applyFoldersPathRelabel(snap), 400);
-      }
+    domUpdateMutationObserver.disconnect();
+    try {
+      runScheduledDomPass();
+    } finally {
+      domUpdateMutationObserver.observe(document.documentElement, DOM_UPDATE_MO_OPTIONS);
     }
-    updateGoogleMapsLinkInDetailPanel();
-    updateGoogleMapsEmbedInDetailPanel();
   });
 }
+
+const domUpdateMutationObserver = new MutationObserver(() => scheduleDomUpdate());
+domUpdateMutationObserver.observe(document.documentElement, DOM_UPDATE_MO_OPTIONS);
 
 /** Top-nav UserAvatar uses the same `/api/users/{id}/profile-image` URL we already parse for partners. */
 function syncSessionUserIdFromNavbar(): void {
@@ -260,6 +304,7 @@ function removeExtensionElements(): void {
   });
 
   removeInjectedPartnerPathAllViewers();
+  cleanupDetailPanelDetailRowsInDocument();
 
   detailPanelMounted = false;
   lastActiveDetailPanelEl = null;
@@ -267,6 +312,7 @@ function removeExtensionElements(): void {
   sawPathLinkThisAsset = false;
   didAutoClickShowLocation = false;
   userDismissedPathThisAsset = false;
+  detailRowsSessionExplicit = {};
 }
 
 async function fetchUser(ownerId: string): Promise<ImmichUserPublic | null> {
@@ -1022,6 +1068,7 @@ function expandAndRewriteFilePath(): void {
     sawPathLinkThisAsset = false;
     didAutoClickShowLocation = false;
     userDismissedPathThisAsset = false;
+    detailRowsSessionExplicit = {};
   }
 
   resetFileLocationTrackingIfAssetChanged();
@@ -1346,11 +1393,18 @@ window.addEventListener('message', (event) => {
   }
 });
 
-const mo = new MutationObserver(() => scheduleDomUpdate());
-mo.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
-
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'sync') return;
+  if (
+    changes[STORAGE_KEYS.infoPanelDetailRowFile] ||
+    changes[STORAGE_KEYS.infoPanelDetailRowCamera] ||
+    changes[STORAGE_KEYS.infoPanelDetailRowLens] ||
+    changes.infoPanelDefaultCollapseFileRow ||
+    changes.infoPanelDefaultCollapseCameraRow ||
+    changes.infoPanelDefaultCollapseLensRow
+  ) {
+    detailRowsSessionExplicit = {};
+  }
   if (
     changes[STORAGE_KEYS.googleMapsLinkInInfoPanel]?.newValue === true ||
     changes[STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel]?.newValue === true
@@ -1366,7 +1420,13 @@ chrome.storage.onChanged.addListener((changes, area) => {
     changes[STORAGE_KEYS.autoOpenFileLocation] ||
     changes[STORAGE_KEYS.remapSlashToFocusSearch] ||
     changes[STORAGE_KEYS.googleMapsLinkInInfoPanel] ||
-    changes[STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel]
+    changes[STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel] ||
+    changes[STORAGE_KEYS.infoPanelDetailRowFile] ||
+    changes[STORAGE_KEYS.infoPanelDetailRowCamera] ||
+    changes[STORAGE_KEYS.infoPanelDetailRowLens] ||
+    changes.infoPanelDefaultCollapseFileRow ||
+    changes.infoPanelDefaultCollapseCameraRow ||
+    changes.infoPanelDefaultCollapseLensRow
   ) {
     readSettingsFromStorage((s) => {
       settings = s;
@@ -1379,6 +1439,13 @@ chrome.storage.onChanged.addListener((changes, area) => {
 readSettingsFromStorage((s) => {
   settings = s;
   settingsHydrated = true;
+  scheduleDomUpdate();
+});
+
+setDetailRowPointerGate(() => settingsHydrated && isUrlEnabled(location.href, settings.enabledUrls));
+
+setDetailRowUserToggleHandler((kind: DetailRowKind, collapsed: boolean) => {
+  detailRowsSessionExplicit = { ...detailRowsSessionExplicit, [kind]: collapsed };
   scheduleDomUpdate();
 });
 

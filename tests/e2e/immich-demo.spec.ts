@@ -527,4 +527,90 @@ test.describe('Immich demo (extension loaded)', () => {
       .poll(async () => pathLink.isVisible(), { timeout: 5_000, intervals: [250, 400, 600, 800, 1_000] })
       .toBe(false);
   });
+
+  test('info panel: default collapsed file row expands on icon click', async ({ context, extensionId }) => {
+    const optPage = await context.newPage();
+    await optPage.goto(`chrome-extension://${extensionId}/options.html`);
+    await optPage.locator('#show-partner-icons').setChecked(true);
+    await optPage.locator('#url-list input').first().fill(`${demoOrigin()}/`);
+    const row = optPage.locator('#mapping-body tr').first();
+    await row.locator('input').nth(0).fill('/var/test');
+    await row.locator('input').nth(1).fill('/data/upload');
+    await optPage.locator('#replace-folders-page-names').setChecked(true);
+    await optPage.locator('input[name="detail-row-file"][value="collapse"]').check();
+    await optPage.locator('#save').click();
+    await optPage.locator('#save-status').filter({ hasText: /Saved/i }).waitFor({ state: 'visible', timeout: 5_000 });
+    await optPage.close();
+
+    const appPage = await context.newPage();
+    await loginDemoImmich(appPage);
+    // Direct /photos/:id open matches other detail-panel tests here; timeline grid click
+    // can fail to open the viewer if the demo grid layout or first asset changes.
+    await appPage.goto(DEMO_GPS_PHOTO, { waitUntil: 'load', timeout: 60_000 });
+    await appPage.locator('[data-testid="asset-viewer-navbar-actions"]').waitFor({
+      state: 'visible',
+      timeout: 30_000,
+    });
+    // Cold /photos/:id often loads with the detail panel unmounted; `i` is easy to miss without focus.
+    const detailPanel = appPage.locator('#detail-panel');
+    if (!(await detailPanel.isVisible().catch(() => false))) {
+      await appPage
+        .getByTestId('asset-viewer-navbar-actions')
+        .getByRole('button', { name: /^Info$/i })
+        .click();
+    }
+    await expect(detailPanel).toBeVisible({ timeout: 15_000 });
+
+    const fileRow = appPage.locator('#detail-panel [data-immich-ui-tweak-detail-row="file"]');
+    await expect(fileRow).toBeVisible({ timeout: 15_000 });
+    await expect(fileRow).toHaveClass(/immich-ui-tweak-detail-row-collapsed/);
+
+    // Icon column and expand overlay both carry kind/action attrs; target the overlay button only.
+    const expandHit = fileRow.locator('button[data-immich-ui-tweak-expand-hit="1"]');
+    await expandHit.click();
+
+    await expect(fileRow).not.toHaveClass(/immich-ui-tweak-detail-row-collapsed/);
+    const pathLink = mappedPathFolderLink(appPage);
+    await expect(pathLink).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('info panel: adjacent default-collapsed file and camera rows use merged icon strip', async ({
+    context,
+    extensionId,
+  }) => {
+    const optPage = await context.newPage();
+    await optPage.goto(`chrome-extension://${extensionId}/options.html`);
+    await optPage.locator('#show-partner-icons').setChecked(true);
+    await optPage.locator('#url-list input').first().fill(`${demoOrigin()}/`);
+    const row = optPage.locator('#mapping-body tr').first();
+    await row.locator('input').nth(0).fill('/var/test');
+    await row.locator('input').nth(1).fill('/data/upload');
+    await optPage.locator('#replace-folders-page-names').setChecked(true);
+    await optPage.locator('input[name="detail-row-file"][value="collapse"]').check();
+    await optPage.locator('input[name="detail-row-camera"][value="collapse"]').check();
+    await optPage.locator('#save').click();
+    await optPage.locator('#save-status').filter({ hasText: /Saved/i }).waitFor({ state: 'visible', timeout: 5_000 });
+    await optPage.close();
+
+    const appPage = await context.newPage();
+    await loginDemoImmich(appPage);
+    await appPage.goto(DEMO_GPS_PHOTO, { waitUntil: 'load', timeout: 60_000 });
+    await appPage.locator('[data-testid="asset-viewer-navbar-actions"]').waitFor({
+      state: 'visible',
+      timeout: 30_000,
+    });
+    await ensureAssetViewerDetailPanelOpen(appPage);
+
+    const toolbar = appPage.locator('#detail-panel [data-immich-ui-tweak-detail-rows-toolbar]');
+    await expect(toolbar).toBeVisible({ timeout: 15_000 });
+    const expandButtons = toolbar.locator(
+      '[data-immich-ui-tweak-detail-row-action="expand"][data-immich-ui-tweak-detail-row-kind]',
+    );
+    await expect(expandButtons).toHaveCount(2);
+    await expect(expandButtons.nth(0)).toHaveAttribute('data-immich-ui-tweak-detail-row-kind', 'file');
+    await expect(expandButtons.nth(1)).toHaveAttribute('data-immich-ui-tweak-detail-row-kind', 'camera');
+
+    await expect(appPage.locator('#detail-panel [data-immich-ui-tweak-detail-row="file"]')).toBeHidden();
+    await expect(appPage.locator('#detail-panel [data-immich-ui-tweak-detail-row="camera"]')).toBeHidden();
+  });
 });

@@ -107,6 +107,40 @@
         </label>
       </section>
 
+      <section>
+        <h2>Info Panel Detail Rows</h2>
+        <p class="hint">
+          <strong>Open</strong> matches Immich's default (details visible).
+          <strong>Collapse</strong> shows a small icon until expanded.
+          <strong>Hide</strong> removes the row entirely (no icon, no way to expand).
+          Detail row icons are always clickable to toggle collapse, except when using "Hide" option.
+        </p>
+
+        <fieldset class="detail-row-mode">
+          <legend class="detail-row-mode-legend">File details</legend>
+          <p class="hint" style="margin-top: 0">File name, disk path, megapixels, resolution, and file size.</p>
+          <label><input type="radio" name="detail-row-file" value="open" checked /> Open (Immich default)</label>
+          <label><input type="radio" name="detail-row-file" value="collapse" /> Collapse</label>
+          <label><input type="radio" name="detail-row-file" value="hide" /> Hide — no option to view</label>
+        </fieldset>
+
+        <fieldset class="detail-row-mode">
+          <legend class="detail-row-mode-legend">Camera details</legend>
+          <p class="hint" style="margin-top: 0">Camera model, shutter speed, and ISO.</p>
+          <label><input type="radio" name="detail-row-camera" value="open" checked /> Open (Immich default)</label>
+          <label><input type="radio" name="detail-row-camera" value="collapse" /> Collapse</label>
+          <label><input type="radio" name="detail-row-camera" value="hide" /> Hide — no option to view</label>
+        </fieldset>
+
+        <fieldset class="detail-row-mode">
+          <legend class="detail-row-mode-legend">Lens details</legend>
+          <p class="hint" style="margin-top: 0">Lens name, aperture, and focal length.</p>
+          <label><input type="radio" name="detail-row-lens" value="open" checked /> Open (Immich default)</label>
+          <label><input type="radio" name="detail-row-lens" value="collapse" /> Collapse</label>
+          <label><input type="radio" name="detail-row-lens" value="hide" /> Hide — no option to view</label>
+        </fieldset>
+      </section>
+
       <div class="options-save-row">
         <p id="save-status" role="status" aria-live="polite"></p>
         <button type="button" id="save" class="primary">Save</button>

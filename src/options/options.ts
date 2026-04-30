@@ -1,8 +1,11 @@
 import { filterCompleteMappings, normalizePathMappingRow } from '../shared/path-mapping';
 import {
   DEFAULT_SETTINGS,
+  isDetailRowPanelMode,
   MAX_ENABLED_URLS,
+  readDetailRowPanelModeForKind,
   STORAGE_KEYS,
+  type DetailRowPanelMode,
   type ExtensionSettings,
   type PathMappingRow,
 } from '../shared/storage-types';
@@ -22,6 +25,21 @@ const googleMapsLinkInInfoPanel = document.getElementById('google-maps-link-info
 const googleMapsEmbedInsteadOfOsmInInfoPanel = document.getElementById(
   'google-maps-embed-instead-of-osm-info-panel',
 ) as HTMLInputElement;
+
+const DETAIL_ROW_FILE_GROUP = 'detail-row-file';
+const DETAIL_ROW_CAMERA_GROUP = 'detail-row-camera';
+const DETAIL_ROW_LENS_GROUP = 'detail-row-lens';
+
+function setDetailRowModeRadios(groupName: string, mode: DetailRowPanelMode): void {
+  const input = document.querySelector<HTMLInputElement>(`input[name="${groupName}"][value="${mode}"]`);
+  if (input) input.checked = true;
+}
+
+function selectedDetailRowMode(groupName: string): DetailRowPanelMode {
+  const el = document.querySelector<HTMLInputElement>(`input[name="${groupName}"]:checked`);
+  const v = el?.value;
+  return isDetailRowPanelMode(v) ? v : 'open';
+}
 const saveStatus = document.getElementById('save-status') as HTMLParagraphElement;
 const appVersion = document.getElementById('app-version') as HTMLSpanElement;
 appVersion.textContent = `Version ${chrome.runtime.getManifest().version}`;
@@ -111,6 +129,9 @@ function render(settings: ExtensionSettings): void {
   remapSlashToFocusSearch.checked = settings.remapSlashToFocusSearch;
   googleMapsLinkInInfoPanel.checked = settings.googleMapsLinkInInfoPanel;
   googleMapsEmbedInsteadOfOsmInInfoPanel.checked = settings.googleMapsEmbedInsteadOfOsmInInfoPanel;
+  setDetailRowModeRadios(DETAIL_ROW_FILE_GROUP, settings.infoPanelDetailRowFile);
+  setDetailRowModeRadios(DETAIL_ROW_CAMERA_GROUP, settings.infoPanelDetailRowCamera);
+  setDetailRowModeRadios(DETAIL_ROW_LENS_GROUP, settings.infoPanelDetailRowLens);
   syncOwnProfileCheckboxEnabled();
 }
 
@@ -126,8 +147,15 @@ function load(): void {
       STORAGE_KEYS.remapSlashToFocusSearch,
       STORAGE_KEYS.googleMapsLinkInInfoPanel,
       STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel,
+      STORAGE_KEYS.infoPanelDetailRowFile,
+      STORAGE_KEYS.infoPanelDetailRowCamera,
+      STORAGE_KEYS.infoPanelDetailRowLens,
+      'infoPanelDefaultCollapseFileRow',
+      'infoPanelDefaultCollapseCameraRow',
+      'infoPanelDefaultCollapseLensRow',
     ],
     (sync) => {
+      const syncRec = sync as Record<string, unknown>;
       const settings: ExtensionSettings = {
         enabledUrls: Array.isArray(sync[STORAGE_KEYS.enabledUrls])
           ? (sync[STORAGE_KEYS.enabledUrls] as string[])
@@ -164,6 +192,9 @@ function load(): void {
           typeof sync[STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel] === 'boolean'
             ? (sync[STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel] as boolean)
             : DEFAULT_SETTINGS.googleMapsEmbedInsteadOfOsmInInfoPanel,
+        infoPanelDetailRowFile: readDetailRowPanelModeForKind(syncRec, 'file'),
+        infoPanelDetailRowCamera: readDetailRowPanelModeForKind(syncRec, 'camera'),
+        infoPanelDetailRowLens: readDetailRowPanelModeForKind(syncRec, 'lens'),
       };
       const empty = Object.keys(sync).length === 0;
       if (empty) {
@@ -178,6 +209,9 @@ function load(): void {
           [STORAGE_KEYS.googleMapsLinkInInfoPanel]: DEFAULT_SETTINGS.googleMapsLinkInInfoPanel,
           [STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel]:
             DEFAULT_SETTINGS.googleMapsEmbedInsteadOfOsmInInfoPanel,
+          [STORAGE_KEYS.infoPanelDetailRowFile]: DEFAULT_SETTINGS.infoPanelDetailRowFile,
+          [STORAGE_KEYS.infoPanelDetailRowCamera]: DEFAULT_SETTINGS.infoPanelDetailRowCamera,
+          [STORAGE_KEYS.infoPanelDetailRowLens]: DEFAULT_SETTINGS.infoPanelDetailRowLens,
         });
         render(DEFAULT_SETTINGS);
       } else {
@@ -220,9 +254,13 @@ function save(): void {
     [STORAGE_KEYS.remapSlashToFocusSearch]: remapSlashToFocusSearch.checked,
     [STORAGE_KEYS.googleMapsLinkInInfoPanel]: googleMapsLinkInInfoPanel.checked,
     [STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel]: googleMapsEmbedInsteadOfOsmInInfoPanel.checked,
+    [STORAGE_KEYS.infoPanelDetailRowFile]: selectedDetailRowMode(DETAIL_ROW_FILE_GROUP),
+    [STORAGE_KEYS.infoPanelDetailRowCamera]: selectedDetailRowMode(DETAIL_ROW_CAMERA_GROUP),
+    [STORAGE_KEYS.infoPanelDetailRowLens]: selectedDetailRowMode(DETAIL_ROW_LENS_GROUP),
   };
 
   chrome.storage.sync.set(payload, () => {
+    void chrome.runtime.lastError;
     saveStatus.style.color = '#16a34a';
     saveStatus.textContent = 'Saved.';
     setTimeout(() => {

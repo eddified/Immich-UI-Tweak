@@ -229,3 +229,23 @@ h2.options-privacy-title {
   height: 16px;
   flex-shrink: 0;
 }
+
+.detail-row-mode {
+  margin: 0 0 16px;
+  padding: 10px 12px 12px;
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.detail-row-mode-legend {
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0 6px;
+}
+
+.detail-row-mode label {
+  display: block;
+  margin: 6px 0 0 2px;
+  font-size: 0.92rem;
+}
