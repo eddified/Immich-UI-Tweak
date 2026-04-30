@@ -562,14 +562,15 @@ test.describe('Immich demo (extension loaded)', () => {
     await expect(detailPanel).toBeVisible({ timeout: 15_000 });
 
     const fileRow = appPage.locator('#detail-panel [data-immich-ui-tweak-detail-row="file"]');
+    await expect(fileRow).toBeHidden({ timeout: 15_000 });
+
+    const toolbar = appPage.locator('#detail-panel [data-immich-ui-tweak-detail-rows-toolbar]');
+    await expect(toolbar).toBeVisible({ timeout: 15_000 });
+    await toolbar
+      .locator('button[data-immich-ui-tweak-detail-row-action="expand"][data-immich-ui-tweak-detail-row-kind="file"]')
+      .click();
+
     await expect(fileRow).toBeVisible({ timeout: 15_000 });
-    await expect(fileRow).toHaveClass(/immich-ui-tweak-detail-row-collapsed/);
-
-    // Icon column and expand overlay both carry kind/action attrs; target the overlay button only.
-    const expandHit = fileRow.locator('button[data-immich-ui-tweak-expand-hit="1"]');
-    await expandHit.click();
-
-    await expect(fileRow).not.toHaveClass(/immich-ui-tweak-detail-row-collapsed/);
     const pathLink = mappedPathFolderLink(appPage);
     await expect(pathLink).toBeVisible({ timeout: 15_000 });
   });

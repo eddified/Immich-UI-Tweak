@@ -15,10 +15,6 @@ const ROW_MARKER = 'data-immich-ui-tweak-detail-row';
 const ROW_HIDDEN_ATTR = 'data-immich-ui-tweak-detail-row-hidden';
 const TOGGLE_KIND = 'data-immich-ui-tweak-detail-row-kind';
 const TOGGLE_ACTION = 'data-immich-ui-tweak-detail-row-action';
-/** Transparent hit target on top of shadow-hosted icons (isolated collapsed row). */
-const EXPAND_HIT = 'data-immich-ui-tweak-expand-hit';
-/** Sibling nodes we set `pointer-events:none` on so the expand overlay receives the hit. */
-const EXPAND_PEER_PE = 'data-immich-ui-tweak-expand-peer-pe';
 
 /** @mdi/js 7.4.47 — Immich web uses ^7.4.47 */
 const MDI_IMAGE_OUTLINE =
@@ -147,9 +143,8 @@ function detailRowsDomMatchesIntent(
   if (prev.toolbarExpandCount !== wantTb) return false;
   if (countToolbarExpandButtons(block) !== wantTb) return false;
   const wantIsolated = items.filter((it, i) => it.collapsed && !inAnyRun(i, runs)).length;
-  const hits = block.querySelectorAll(`[${EXPAND_HIT}]`).length;
   const collapsedClassRows = block.querySelectorAll('.immich-ui-tweak-detail-row-collapsed').length;
-  if (hits !== wantIsolated || collapsedClassRows !== wantIsolated) return false;
+  if (wantIsolated !== 0 || collapsedClassRows !== 0) return false;
   for (const r of runs) {
     for (let k = r.start; k <= r.end; k++) {
       if (items[k].el.style.display !== 'none') return false;
@@ -171,7 +166,7 @@ function findCollapsedRuns(items: { kind: DetailRowKind; el: HTMLElement; collap
     const start = i;
     while (i < items.length && items[i].collapsed) i++;
     const end = i - 1;
-    if (end - start + 1 >= 2) runs.push({ start, end });
+    runs.push({ start, end });
   }
   return runs;
 }
@@ -211,54 +206,13 @@ function clearSecondColumnSoftHide(second: HTMLElement): void {
   second.removeAttribute('aria-hidden');
 }
 
-function applySecondColumnSoftHide(second: HTMLElement): void {
-  clearSecondColumnSoftHide(second);
-  Object.assign(second.style, {
-    overflow: 'hidden',
-    maxHeight: '0',
-    opacity: '0',
-    pointerEvents: 'none',
-    margin: '0',
-    padding: '0',
-    border: 'none',
-    minHeight: '0',
-    lineHeight: '0',
-  });
-  second.setAttribute('aria-hidden', 'true');
-}
-
 type ColumnWithToggle = HTMLElement & {
   __immichUiTweakColToggle?: (e: Event) => void;
-  /** Capture-phase click on the icon column so expand matches native button timing (mouseup). */
-  __immichUiTweakExpandColPtr?: (e: MouseEvent) => void;
 };
 
 type ToolbarWithExpandPtr = HTMLElement & {
   __immichUiTweakToolbarExpandPtr?: (e: MouseEvent) => void;
 };
-
-function clearExpandColumnPointer(el: HTMLElement): void {
-  const col = el as ColumnWithToggle;
-  const h = col.__immichUiTweakExpandColPtr;
-  if (h) {
-    el.removeEventListener('click', h, true);
-    delete col.__immichUiTweakExpandColPtr;
-  }
-}
-
-/** Intercept on the column (capture, click) as a fallback when retargeting hides our overlay from composedPath(). */
-function bindExpandColumnClickCapture(col: HTMLElement, kind: DetailRowKind): void {
-  clearExpandColumnPointer(col);
-  const h = (e: MouseEvent): void => {
-    if (!pointerGate() || !userToggleHandler) return;
-    if (e.button !== 0) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    userToggleHandler(kind, false);
-  };
-  (col as ColumnWithToggle).__immichUiTweakExpandColPtr = h;
-  col.addEventListener('click', h, true);
-}
 
 function clearColumnToggleHandlers(el: HTMLElement): void {
   const col = el as ColumnWithToggle;
@@ -280,8 +234,7 @@ function resetRowPresentation(row: HTMLElement): void {
     clearSecondColumnSoftHide(second);
   }
   if (first) {
-    removeExpandOverlay(first);
-    clearExpandColumnPointer(first);
+    removeLegacyExpandOverlay(first);
     clearColumnToggleHandlers(first);
     first.removeAttribute(TOGGLE_KIND);
     first.removeAttribute(TOGGLE_ACTION);
@@ -304,52 +257,15 @@ function resetRowPresentation(row: HTMLElement): void {
   }
 }
 
-function removeExpandOverlay(col: HTMLElement): void {
-  for (const el of col.querySelectorAll(`[${EXPAND_PEER_PE}]`)) {
+/** Remove pre-toolbar expand overlay nodes (older extension versions) from the icon column. */
+function removeLegacyExpandOverlay(col: HTMLElement): void {
+  for (const el of col.querySelectorAll('[data-immich-ui-tweak-expand-peer-pe]')) {
     if (el instanceof HTMLElement) {
       el.style.removeProperty('pointer-events');
-      el.removeAttribute(EXPAND_PEER_PE);
+      el.removeAttribute('data-immich-ui-tweak-expand-peer-pe');
     }
   }
-  col.querySelector(`[${EXPAND_HIT}]`)?.remove();
-}
-
-/** Full-cell invisible button so expand works even when Immich icons live in closed / retargeted shadow DOM. */
-function addExpandHitOverlay(col: HTMLElement, kind: DetailRowKind): void {
-  removeExpandOverlay(col);
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.setAttribute(EXPAND_HIT, '1');
-  b.setAttribute(TOGGLE_KIND, kind);
-  b.setAttribute(TOGGLE_ACTION, 'expand');
-  b.setAttribute('aria-label', `Expand ${kind} details`);
-  b.setAttribute('aria-expanded', 'false');
-  b.style.cssText = [
-    'position:absolute',
-    'top:0',
-    'left:0',
-    'right:0',
-    'bottom:0',
-    'width:100%',
-    'min-height:44px',
-    'min-width:44px',
-    'padding:0',
-    'margin:0',
-    'border:0',
-    'border-radius:8px',
-    'background:transparent',
-    'cursor:pointer',
-    'z-index:2147483646',
-    'box-sizing:border-box',
-    'pointer-events:auto',
-  ].join(';');
-  col.appendChild(b);
-  /* Immich icon hosts sit above the overlay in hit order unless they ignore pointer events. */
-  for (const child of [...col.children]) {
-    if (child === b || !(child instanceof HTMLElement)) continue;
-    child.setAttribute(EXPAND_PEER_PE, '1');
-    child.style.setProperty('pointer-events', 'none');
-  }
+  col.querySelector('[data-immich-ui-tweak-expand-hit="1"]')?.remove();
 }
 
 function svgIconButton(kind: DetailRowKind, action: 'expand' | 'collapse', sizePx: number): HTMLButtonElement {
@@ -379,18 +295,12 @@ function svgIconButton(kind: DetailRowKind, action: 'expand' | 'collapse', sizeP
   return btn;
 }
 
-function decorateIconColumn(
-  col: HTMLElement,
-  kind: DetailRowKind,
-  action: 'expand' | 'collapse',
-  iconSizePx: number,
-): void {
-  removeExpandOverlay(col);
-  clearExpandColumnPointer(col);
+function decorateIconColumn(col: HTMLElement, kind: DetailRowKind, iconSizePx: number): void {
+  removeLegacyExpandOverlay(col);
   clearColumnToggleHandlers(col);
 
   col.setAttribute(TOGGLE_KIND, kind);
-  col.setAttribute(TOGGLE_ACTION, action);
+  col.setAttribute(TOGGLE_ACTION, 'collapse');
   col.style.position = 'relative';
   col.style.zIndex = '1';
   col.style.pointerEvents = 'auto';
@@ -398,19 +308,7 @@ function decorateIconColumn(
   if (svg) {
     svg.setAttribute('width', String(iconSizePx));
     svg.setAttribute('height', String(iconSizePx));
-    /* Let the overlay (expand) or column handler (collapse) receive the gesture. */
     svg.style.setProperty('pointer-events', 'none');
-  }
-
-  if (action === 'expand') {
-    col.removeAttribute('role');
-    col.removeAttribute('tabindex');
-    col.removeAttribute('aria-expanded');
-    col.removeAttribute('aria-label');
-    col.style.cursor = '';
-    addExpandHitOverlay(col, kind);
-    bindExpandColumnClickCapture(col, kind);
-    return;
   }
 
   col.setAttribute('role', 'button');
@@ -418,7 +316,7 @@ function decorateIconColumn(
   col.setAttribute('aria-expanded', 'true');
   col.setAttribute('aria-label', `Collapse ${kind} details`);
   col.style.cursor = 'pointer';
-  bindColumnToggleHandlers(col, kind, action);
+  bindColumnToggleHandlers(col, kind);
 }
 
 let userToggleHandler: ((kind: DetailRowKind, collapsed: boolean) => void) | null = null;
@@ -433,9 +331,6 @@ export function setDetailRowPointerGate(fn: () => boolean): void {
 let globalExpandClickInstalled = false;
 
 function isExpandControlInDetailPanel(node: HTMLElement): boolean {
-  if (node.matches(`button[${EXPAND_HIT}]`)) {
-    return Boolean(node.closest('#detail-panel'));
-  }
   if (node.tagName === 'BUTTON' && node.getAttribute(TOGGLE_ACTION) === 'expand') {
     return Boolean(node.closest(`[${TOOLBAR_ATTR}]`)?.closest('#detail-panel'));
   }
@@ -445,14 +340,6 @@ function isExpandControlInDetailPanel(node: HTMLElement): boolean {
 function tryHandleExpandActivation(ev: MouseEvent | PointerEvent, node: HTMLElement | null): boolean {
   if (!node || !userToggleHandler) return false;
   if (!isExpandControlInDetailPanel(node)) return false;
-  if (node.matches(`button[${EXPAND_HIT}]`)) {
-    const kind = node.getAttribute(TOGGLE_KIND) as DetailRowKind | null;
-    if (!kind) return false;
-    ev.preventDefault();
-    ev.stopPropagation();
-    userToggleHandler(kind, false);
-    return true;
-  }
   if (node.tagName === 'BUTTON' && node.getAttribute(TOGGLE_ACTION) === 'expand') {
     const bar = node.closest(`[${TOOLBAR_ATTR}]`);
     if (!bar) return false;
@@ -476,9 +363,8 @@ function composedPathTouchesDetailPanel(path: EventTarget[]): boolean {
 }
 
 /**
- * Clicks on shadow-internal icons never include our sibling overlay button in `composedPath()`.
- * Isolated rows use capture `click` on the icon column as a fallback; `elementsFromPoint` covers
- * toolbar + overlay hits; keyboard still delivers `click` on real buttons.
+ * Fallback for expand taps when `composedPath()` omits the toolbar target; `elementsFromPoint`
+ * still finds the button under the cursor.
  */
 function handleGlobalExpandActivation(ev: MouseEvent | PointerEvent): void {
   if (!pointerGate() || !userToggleHandler) return;
@@ -513,11 +399,7 @@ function ensureGlobalExpandClick(): void {
  * Direct listeners on the icon column (capture phase) so clicks that originate inside
  * `@immich/ui` Shadow DOM still hit our handler when they bubble/retarget through the host.
  */
-function bindColumnToggleHandlers(
-  el: HTMLElement,
-  kind: DetailRowKind,
-  action: 'expand' | 'collapse',
-): void {
+function bindColumnToggleHandlers(el: HTMLElement, kind: DetailRowKind): void {
   clearColumnToggleHandlers(el);
   const col = el as ColumnWithToggle;
   const h = (e: Event): void => {
@@ -527,7 +409,7 @@ function bindColumnToggleHandlers(
     }
     e.preventDefault();
     e.stopPropagation();
-    userToggleHandler?.(kind, action === 'collapse');
+    userToggleHandler?.(kind, true);
   };
   col.__immichUiTweakColToggle = h;
   el.addEventListener('click', h, true);
@@ -630,22 +512,11 @@ export function applyInfoPanelDetailRows(
 
     if (!collapsed) {
       const first = el.children[0] as HTMLElement | undefined;
-      if (first) decorateIconColumn(first, kind, 'collapse', 24);
+      if (first) decorateIconColumn(first, kind, 24);
       continue;
     }
 
-    const run = inAnyRun(i, runs);
-    if (run) {
-      el.style.display = 'none';
-      continue;
-    }
-
-    /* Isolated collapsed */
-    el.classList.add('immich-ui-tweak-detail-row-collapsed');
-    const first = el.children[0] as HTMLElement | undefined;
-    const second = el.children[1] as HTMLElement | undefined;
-    if (second) applySecondColumnSoftHide(second);
-    if (first) decorateIconColumn(first, kind, 'expand', stripIconPx);
+    el.style.display = 'none';
   }
 
   for (const run of runs) {
