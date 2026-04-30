@@ -117,3 +117,11 @@
   height: 100%;
   border: 0;
 }
+
+/*
+ * Immich asset info description uses Tailwind max-h-40 (~160px) on the autogrow textarea.
+ * Optional override — only this textarea, only when html has the extension toggle class.
+ */
+html.immich-ui-tweak-info-panel-large-description #detail-panel textarea[data-testid='autogrow-textarea'] {
+  max-height: none !important;
+}

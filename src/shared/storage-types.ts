@@ -14,6 +14,8 @@ export const STORAGE_KEYS = {
   infoPanelDetailRowFile: 'infoPanelDetailRowFile',
   infoPanelDetailRowCamera: 'infoPanelDetailRowCamera',
   infoPanelDetailRowLens: 'infoPanelDetailRowLens',
+  /** When true, remove max-height cap on the asset description textarea in the info panel. */
+  infoPanelLargeDescriptionField: 'infoPanelLargeDescriptionField',
 } as const;
 
 export type DetailRowKind = 'file' | 'camera' | 'lens';
@@ -101,6 +103,8 @@ export interface ExtensionSettings {
   infoPanelDetailRowFile: DetailRowPanelMode;
   infoPanelDetailRowCamera: DetailRowPanelMode;
   infoPanelDetailRowLens: DetailRowPanelMode;
+  /** When true, the description editor in the info panel can grow without Immich's ~160px max height. */
+  infoPanelLargeDescriptionField: boolean;
 }
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
@@ -116,4 +120,5 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   infoPanelDetailRowFile: 'open',
   infoPanelDetailRowCamera: 'open',
   infoPanelDetailRowLens: 'open',
+  infoPanelLargeDescriptionField: true,
 };

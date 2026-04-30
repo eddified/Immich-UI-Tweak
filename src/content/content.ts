@@ -48,6 +48,9 @@ const MSG_CURRENT_USER = 'currentUser';
 const MSG_ASSET_DETAIL = 'assetDetail';
 const MSG_USER_DETAIL = 'userDetail';
 
+/** Toggled on `<html>` when the user opts into an uncapped description textarea in `#detail-panel`. */
+const INFO_PANEL_LARGE_DESCRIPTION_ROOT_CLASS = 'immich-ui-tweak-info-panel-large-description';
+
 type AssetApiDetail = {
   ownerId: string | null;
   originalPath: string | null;
@@ -131,6 +134,7 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
       STORAGE_KEYS.infoPanelDetailRowFile,
       STORAGE_KEYS.infoPanelDetailRowCamera,
       STORAGE_KEYS.infoPanelDetailRowLens,
+      STORAGE_KEYS.infoPanelLargeDescriptionField,
       'infoPanelDefaultCollapseFileRow',
       'infoPanelDefaultCollapseCameraRow',
       'infoPanelDefaultCollapseLensRow',
@@ -175,6 +179,10 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
       const infoPanelDetailRowFile = readDetailRowPanelModeForKind(syncRec, 'file');
       const infoPanelDetailRowCamera = readDetailRowPanelModeForKind(syncRec, 'camera');
       const infoPanelDetailRowLens = readDetailRowPanelModeForKind(syncRec, 'lens');
+      const infoPanelLargeDescriptionField =
+        typeof sync[STORAGE_KEYS.infoPanelLargeDescriptionField] === 'boolean'
+          ? (sync[STORAGE_KEYS.infoPanelLargeDescriptionField] as boolean)
+          : DEFAULT_SETTINGS.infoPanelLargeDescriptionField;
       cb({
         enabledUrls: enabledUrls.slice(0, 32),
         pathMappings,
@@ -188,6 +196,7 @@ function readSettingsFromStorage(cb: (s: ExtensionSettings) => void): void {
         infoPanelDetailRowFile,
         infoPanelDetailRowCamera,
         infoPanelDetailRowLens,
+        infoPanelLargeDescriptionField,
       });
     },
   );
@@ -209,7 +218,20 @@ requestMainWorldInject();
 
 const DOM_UPDATE_MO_OPTIONS = { subtree: true, childList: true, characterData: true } as const;
 
+function syncInfoPanelLargeDescriptionRootClass(): void {
+  if (!settingsHydrated || !isUrlEnabled(location.href, settings.enabledUrls)) {
+    document.documentElement.classList.remove(INFO_PANEL_LARGE_DESCRIPTION_ROOT_CLASS);
+    return;
+  }
+  if (settings.infoPanelLargeDescriptionField) {
+    document.documentElement.classList.add(INFO_PANEL_LARGE_DESCRIPTION_ROOT_CLASS);
+  } else {
+    document.documentElement.classList.remove(INFO_PANEL_LARGE_DESCRIPTION_ROOT_CLASS);
+  }
+}
+
 function runScheduledDomPass(): void {
+  syncInfoPanelLargeDescriptionRootClass();
   syncSessionUserIdFromNavbar();
   updateThumbnailOverlays();
   updateViewerOverlay();
@@ -313,6 +335,7 @@ function removeExtensionElements(): void {
   didAutoClickShowLocation = false;
   userDismissedPathThisAsset = false;
   detailRowsSessionExplicit = {};
+  document.documentElement.classList.remove(INFO_PANEL_LARGE_DESCRIPTION_ROOT_CLASS);
 }
 
 async function fetchUser(ownerId: string): Promise<ImmichUserPublic | null> {
@@ -1424,6 +1447,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     changes[STORAGE_KEYS.infoPanelDetailRowFile] ||
     changes[STORAGE_KEYS.infoPanelDetailRowCamera] ||
     changes[STORAGE_KEYS.infoPanelDetailRowLens] ||
+    changes[STORAGE_KEYS.infoPanelLargeDescriptionField] ||
     changes.infoPanelDefaultCollapseFileRow ||
     changes.infoPanelDefaultCollapseCameraRow ||
     changes.infoPanelDefaultCollapseLensRow

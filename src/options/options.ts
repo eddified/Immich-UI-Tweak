@@ -25,6 +25,9 @@ const googleMapsLinkInInfoPanel = document.getElementById('google-maps-link-info
 const googleMapsEmbedInsteadOfOsmInInfoPanel = document.getElementById(
   'google-maps-embed-instead-of-osm-info-panel',
 ) as HTMLInputElement;
+const infoPanelLargeDescriptionField = document.getElementById(
+  'info-panel-large-description-field',
+) as HTMLInputElement;
 
 const DETAIL_ROW_FILE_GROUP = 'detail-row-file';
 const DETAIL_ROW_CAMERA_GROUP = 'detail-row-camera';
@@ -129,6 +132,7 @@ function render(settings: ExtensionSettings): void {
   remapSlashToFocusSearch.checked = settings.remapSlashToFocusSearch;
   googleMapsLinkInInfoPanel.checked = settings.googleMapsLinkInInfoPanel;
   googleMapsEmbedInsteadOfOsmInInfoPanel.checked = settings.googleMapsEmbedInsteadOfOsmInInfoPanel;
+  infoPanelLargeDescriptionField.checked = settings.infoPanelLargeDescriptionField;
   setDetailRowModeRadios(DETAIL_ROW_FILE_GROUP, settings.infoPanelDetailRowFile);
   setDetailRowModeRadios(DETAIL_ROW_CAMERA_GROUP, settings.infoPanelDetailRowCamera);
   setDetailRowModeRadios(DETAIL_ROW_LENS_GROUP, settings.infoPanelDetailRowLens);
@@ -150,6 +154,7 @@ function load(): void {
       STORAGE_KEYS.infoPanelDetailRowFile,
       STORAGE_KEYS.infoPanelDetailRowCamera,
       STORAGE_KEYS.infoPanelDetailRowLens,
+      STORAGE_KEYS.infoPanelLargeDescriptionField,
       'infoPanelDefaultCollapseFileRow',
       'infoPanelDefaultCollapseCameraRow',
       'infoPanelDefaultCollapseLensRow',
@@ -195,6 +200,10 @@ function load(): void {
         infoPanelDetailRowFile: readDetailRowPanelModeForKind(syncRec, 'file'),
         infoPanelDetailRowCamera: readDetailRowPanelModeForKind(syncRec, 'camera'),
         infoPanelDetailRowLens: readDetailRowPanelModeForKind(syncRec, 'lens'),
+        infoPanelLargeDescriptionField:
+          typeof sync[STORAGE_KEYS.infoPanelLargeDescriptionField] === 'boolean'
+            ? (sync[STORAGE_KEYS.infoPanelLargeDescriptionField] as boolean)
+            : DEFAULT_SETTINGS.infoPanelLargeDescriptionField,
       };
       const empty = Object.keys(sync).length === 0;
       if (empty) {
@@ -212,6 +221,7 @@ function load(): void {
           [STORAGE_KEYS.infoPanelDetailRowFile]: DEFAULT_SETTINGS.infoPanelDetailRowFile,
           [STORAGE_KEYS.infoPanelDetailRowCamera]: DEFAULT_SETTINGS.infoPanelDetailRowCamera,
           [STORAGE_KEYS.infoPanelDetailRowLens]: DEFAULT_SETTINGS.infoPanelDetailRowLens,
+          [STORAGE_KEYS.infoPanelLargeDescriptionField]: DEFAULT_SETTINGS.infoPanelLargeDescriptionField,
         });
         render(DEFAULT_SETTINGS);
       } else {
@@ -257,6 +267,7 @@ function save(): void {
     [STORAGE_KEYS.infoPanelDetailRowFile]: selectedDetailRowMode(DETAIL_ROW_FILE_GROUP),
     [STORAGE_KEYS.infoPanelDetailRowCamera]: selectedDetailRowMode(DETAIL_ROW_CAMERA_GROUP),
     [STORAGE_KEYS.infoPanelDetailRowLens]: selectedDetailRowMode(DETAIL_ROW_LENS_GROUP),
+    [STORAGE_KEYS.infoPanelLargeDescriptionField]: infoPanelLargeDescriptionField.checked,
   };
 
   chrome.storage.sync.set(payload, () => {
