@@ -5,6 +5,7 @@ import {
   type DemoPathMapping,
   demoOrigin,
   loginDemoImmich,
+  openExtensionOptions,
 } from '../../scripts/demo-e2e-preset.js';
 import { expect, test } from './fixtures';
 
@@ -475,7 +476,7 @@ test.describe('Immich demo (extension loaded)', () => {
 
   test('info panel: Google Maps embed iframe when replace-OSM option on', async ({ context, extensionId }) => {
     const optPage = await context.newPage();
-    await optPage.goto(`chrome-extension://${extensionId}/options.html`);
+    await openExtensionOptions(optPage, extensionId);
     await optPage.locator('#show-partner-icons').setChecked(true);
     await optPage.locator('#url-list input').first().fill(`${demoOrigin()}/`);
     const row = optPage.locator('#mapping-body tr').first();
@@ -501,6 +502,114 @@ test.describe('Immich demo (extension loaded)', () => {
     const src = await iframe.getAttribute('src');
     expect(src).toBeTruthy();
     expect(src!.includes('google.com') && src!.includes('/maps')).toBe(true);
+  });
+
+  test('info panel: edit faces panel covers extension toolbar and Google Maps embed', async ({
+    context,
+    extensionId,
+  }) => {
+    const optPage = await context.newPage();
+    await openExtensionOptions(optPage, extensionId);
+    await optPage.locator('#show-partner-icons').setChecked(true);
+    await optPage.locator('#url-list input').first().fill(`${demoOrigin()}/`);
+    const row = optPage.locator('#mapping-body tr').first();
+    await row.locator('input').nth(0).fill('/var/test');
+    await row.locator('input').nth(1).fill('/data/upload');
+    await optPage.locator('#replace-folders-page-names').setChecked(true);
+    await optPage.locator('#google-maps-embed-instead-of-osm-info-panel').setChecked(true);
+    await optPage.locator('input[name="detail-row-file"][value="collapse"]').check();
+    await optPage.locator('input[name="detail-row-camera"][value="collapse"]').check();
+    await optPage.locator('#save').click();
+    await optPage.locator('#save-status').filter({ hasText: /Saved/i }).waitFor({ state: 'visible', timeout: 5_000 });
+    await optPage.close();
+
+    const appPage = await context.newPage();
+    await loginDemoImmich(appPage);
+    await appPage.goto(DEMO_GPS_PHOTO, { waitUntil: 'load', timeout: 60_000 });
+    await appPage.locator('[data-testid="asset-viewer-navbar-actions"]').waitFor({
+      state: 'visible',
+      timeout: 30_000,
+    });
+    await ensureAssetViewerDetailPanelOpen(appPage);
+    const detailPanel = appPage.locator('#detail-panel');
+    if (!(await detailPanel.isVisible().catch(() => false))) {
+      await appPage
+        .getByTestId('asset-viewer-navbar-actions')
+        .getByRole('button', { name: /^Info$/i })
+        .click();
+    }
+    await expect(detailPanel).toBeVisible({ timeout: 15_000 });
+
+    const toolbar = appPage.locator('#detail-panel [data-immich-ui-tweak-detail-rows-toolbar]');
+    await expect(toolbar).toBeVisible({ timeout: 15_000 });
+    const iframe = appPage.getByTestId('immich-ui-tweak-google-maps-embed-iframe');
+    await expect(iframe).toBeAttached({ timeout: 30_000 });
+
+    const hitTestPoints = await appPage.evaluate(() => {
+      const centers: { name: string; x: number; y: number }[] = [];
+      const addCenter = (name: string, el: Element | null): void => {
+        if (!(el instanceof HTMLElement)) return;
+        const r = el.getBoundingClientRect();
+        centers.push({ name, x: r.left + r.width / 2, y: r.top + r.height / 2 });
+      };
+      addCenter('toolbar', document.querySelector('#detail-panel [data-immich-ui-tweak-detail-rows-toolbar]'));
+      addCenter('map', document.querySelector('[data-testid="immich-ui-tweak-google-maps-embed-iframe"]'));
+      return centers;
+    });
+    expect(hitTestPoints.map((p) => p.name).sort()).toEqual(['map', 'toolbar']);
+
+    const editPeople = appPage.getByRole('button', { name: /edit (people|faces)/i }).first();
+    test.skip(
+      (await editPeople.count()) === 0,
+      'Demo asset does not currently expose Immich detected-face edit control',
+    );
+    await editPeople.scrollIntoViewIfNeeded();
+    await editPeople.click();
+
+    await expect(appPage.getByText(/edit (people|faces)/i).first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const hits = await appPage.evaluate((points) => {
+      const editPanels = Array.from(document.querySelectorAll('aside,section,div')).filter((el) => {
+        if (!(el instanceof HTMLElement)) return false;
+        if (!/edit (people|faces)/i.test(el.innerText)) return false;
+        const r = el.getBoundingClientRect();
+        return r.width > 100 && r.height > 100;
+      });
+
+      return points.map((p) => {
+        const top = document.elementFromPoint(p.x, p.y);
+        const topElement = top instanceof HTMLElement ? top : null;
+        const extensionHit = Boolean(
+          topElement?.closest(
+            '[data-immich-ui-tweak-detail-rows-toolbar], .immich-ui-tweak-google-maps-embed-wrap, [data-testid="immich-ui-tweak-google-maps-embed-iframe"]',
+          ),
+        );
+        const inEditPanel = editPanels.some((panel) => panel.contains(topElement));
+        return {
+          ...p,
+          extensionHit,
+          inEditPanel,
+          top: topElement
+            ? {
+                tag: topElement.tagName,
+                testId: topElement.getAttribute('data-testid'),
+                classes: topElement.className,
+              }
+            : null,
+        };
+      });
+    }, hitTestPoints);
+
+    for (const hit of hits) {
+      expect(hit.extensionHit, `${hit.name} point should not hit extension UI: ${JSON.stringify(hit.top)}`).toBe(
+        false,
+      );
+      expect(hit.inEditPanel, `${hit.name} point should hit the edit faces panel: ${JSON.stringify(hit.top)}`).toBe(
+        true,
+      );
+    }
   });
 
   test('info panel: file path stays hidden after user toggles it off', async ({ context, extensionId }) => {

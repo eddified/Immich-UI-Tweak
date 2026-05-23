@@ -107,7 +107,6 @@
 .immich-ui-tweak-google-maps-embed-wrap {
   position: absolute;
   inset: 0;
-  z-index: 10;
   box-sizing: border-box;
 }
 

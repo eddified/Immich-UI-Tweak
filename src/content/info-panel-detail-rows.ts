@@ -302,7 +302,6 @@ function decorateIconColumn(col: HTMLElement, kind: DetailRowKind, iconSizePx: n
   col.setAttribute(TOGGLE_KIND, kind);
   col.setAttribute(TOGGLE_ACTION, 'collapse');
   col.style.position = 'relative';
-  col.style.zIndex = '1';
   col.style.pointerEvents = 'auto';
   const svg = col.querySelector<SVGSVGElement>('svg');
   if (svg) {
@@ -529,7 +528,6 @@ export function applyInfoPanelDetailRows(
       'gap:10px',
       'padding:4px 0',
       'position:relative',
-      'z-index:2147483645',
       'pointer-events:auto',
     ].join(';');
     for (let k = run.start; k <= run.end; k++) {

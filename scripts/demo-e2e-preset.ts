@@ -16,6 +16,19 @@ export type SiteExtensionSettings = {
   pathMappings: DemoPathMapping[];
 };
 
+export async function openExtensionOptions(page: Page, extensionId: string): Promise<void> {
+  const url = `chrome-extension://${extensionId}/options.html`;
+  try {
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
+  } catch (e) {
+    if (!(e instanceof Error) || !e.message.includes(`another navigation to "${url}"`)) {
+      throw e;
+    }
+    await page.waitForLoadState('domcontentloaded');
+  }
+  await page.locator('#save').waitFor({ state: 'visible', timeout: 5_000 });
+}
+
 export async function applyExtensionSettingsForSite(
   page: Page,
   extensionId: string,
@@ -26,7 +39,7 @@ export async function applyExtensionSettingsForSite(
   if (rows.length === 0) {
     throw new Error('applyExtensionSettingsForSite: pathMappings must be non-empty');
   }
-  await page.goto(`chrome-extension://${extensionId}/options.html`);
+  await openExtensionOptions(page, extensionId);
   await page.locator('#show-partner-icons').setChecked(true);
   await page.locator('#url-list input').first().fill(`${origin}/`);
   const mappingRows = page.locator('#mapping-body tr');
