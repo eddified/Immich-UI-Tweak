@@ -16,6 +16,8 @@ const PARTNER_PHOTO_COLD = `${DEMO}/photos/41908224-87c9-4588-bde1-b89c77f122fd`
 
 /** Demo asset with GPS in EXIF (for extension Google Maps row). */
 const DEMO_GPS_PHOTO = `${DEMO}/photos/cbd3d4ce-859c-4c70-9077-56bb2547b04e`;
+/** Demo asset with GPS and already-tagged people (for Immich's "Edit people" panel). */
+const DEMO_GPS_TAGGED_PEOPLE_PHOTO = `${DEMO}/photos/9528a85a-e168-4dce-adcb-38110e7357df`;
 
 /**
  * Default demo mapping (`applyDemoExtensionSettings`): `/data/upload` → `/var/test`.
@@ -106,9 +108,19 @@ async function saveExtensionOptionsForSite(
 /** Immich persists detail open/closed (`asset-viewer-state`); `i` toggles — ensure open for assertions. */
 async function ensureAssetViewerDetailPanelOpen(page: Page) {
   const panel = page.locator('#detail-panel');
+  const infoButton = page
+    .getByTestId('asset-viewer-navbar-actions')
+    .getByRole('button', { name: /^Info$/i });
   for (let i = 0; i < 8; i++) {
     if (await panel.isVisible().catch(() => false)) return;
-    await page.keyboard.press('i');
+    if (i % 2 === 0) {
+      await infoButton.click().catch(() => page.keyboard.press('i'));
+    } else {
+      await page.keyboard.press('i');
+    }
+    if (i >= 3 && !(await panel.isVisible().catch(() => false))) {
+      await infoButton.dispatchEvent('click').catch(() => undefined);
+    }
     await page.waitForTimeout(250);
   }
 }
@@ -525,7 +537,7 @@ test.describe('Immich demo (extension loaded)', () => {
 
     const appPage = await context.newPage();
     await loginDemoImmich(appPage);
-    await appPage.goto(DEMO_GPS_PHOTO, { waitUntil: 'load', timeout: 60_000 });
+    await appPage.goto(DEMO_GPS_TAGGED_PEOPLE_PHOTO, { waitUntil: 'load', timeout: 60_000 });
     await appPage.locator('[data-testid="asset-viewer-navbar-actions"]').waitFor({
       state: 'visible',
       timeout: 30_000,
@@ -545,7 +557,7 @@ test.describe('Immich demo (extension loaded)', () => {
     const iframe = appPage.getByTestId('immich-ui-tweak-google-maps-embed-iframe');
     await expect(iframe).toBeAttached({ timeout: 30_000 });
 
-    const hitTestPoints = await appPage.evaluate(() => {
+    const extensionControlPoints = await appPage.evaluate(() => {
       const centers: { name: string; x: number; y: number }[] = [];
       const addCenter = (name: string, el: Element | null): void => {
         if (!(el instanceof HTMLElement)) return;
@@ -556,27 +568,43 @@ test.describe('Immich demo (extension loaded)', () => {
       addCenter('map', document.querySelector('[data-testid="immich-ui-tweak-google-maps-embed-iframe"]'));
       return centers;
     });
-    expect(hitTestPoints.map((p) => p.name).sort()).toEqual(['map', 'toolbar']);
+    expect(extensionControlPoints.map((p) => p.name).sort()).toEqual(['map', 'toolbar']);
 
     const editPeople = appPage.getByRole('button', { name: /edit (people|faces)/i }).first();
-    test.skip(
-      (await editPeople.count()) === 0,
-      'Demo asset does not currently expose Immich detected-face edit control',
-    );
     await editPeople.scrollIntoViewIfNeeded();
-    await editPeople.click();
+    await editPeople.dispatchEvent('click');
 
-    await expect(appPage.getByText(/edit (people|faces)/i).first()).toBeVisible({
+    const editFacesHeading = appPage.getByText(/edit (people|faces)/i).first();
+    await expect(editFacesHeading).toBeVisible({
       timeout: 15_000,
     });
+    await editFacesHeading.scrollIntoViewIfNeeded();
 
-    const hits = await appPage.evaluate((points) => {
+    const hits = await appPage.evaluate(() => {
       const editPanels = Array.from(document.querySelectorAll('aside,section,div')).filter((el) => {
         if (!(el instanceof HTMLElement)) return false;
         if (!/edit (people|faces)/i.test(el.innerText)) return false;
+        if (el.querySelector('[data-immich-ui-tweak-detail-rows-toolbar], [data-testid="immich-ui-tweak-google-maps-embed-iframe"]')) {
+          return false;
+        }
         const r = el.getBoundingClientRect();
         return r.width > 100 && r.height > 100;
       });
+      const editPanel = editPanels
+        .map((panel) => ({ panel, rect: panel.getBoundingClientRect() }))
+        .filter(({ rect }) => rect.bottom > 0 && rect.right > 0 && rect.top < window.innerHeight && rect.left < window.innerWidth)
+        .sort((a, b) => a.rect.width * a.rect.height - b.rect.width * b.rect.height)[0];
+      if (!editPanel) return [];
+
+      const r = editPanel.rect;
+      const points = [
+        { name: 'edit-faces-header', x: r.left + r.width / 2, y: Math.max(r.top + 20, 20) },
+        {
+          name: 'edit-faces-body',
+          x: r.left + r.width / 2,
+          y: Math.min(r.bottom - 20, window.innerHeight - 20),
+        },
+      ];
 
       return points.map((p) => {
         const top = document.elementFromPoint(p.x, p.y);
@@ -586,7 +614,7 @@ test.describe('Immich demo (extension loaded)', () => {
             '[data-immich-ui-tweak-detail-rows-toolbar], .immich-ui-tweak-google-maps-embed-wrap, [data-testid="immich-ui-tweak-google-maps-embed-iframe"]',
           ),
         );
-        const inEditPanel = editPanels.some((panel) => panel.contains(topElement));
+        const inEditPanel = editPanel.panel.contains(topElement);
         return {
           ...p,
           extensionHit,
@@ -600,7 +628,9 @@ test.describe('Immich demo (extension loaded)', () => {
             : null,
         };
       });
-    }, hitTestPoints);
+    });
+
+    expect(hits.map((h) => h.name).sort()).toEqual(['edit-faces-body', 'edit-faces-header']);
 
     for (const hit of hits) {
       expect(hit.extensionHit, `${hit.name} point should not hit extension UI: ${JSON.stringify(hit.top)}`).toBe(
