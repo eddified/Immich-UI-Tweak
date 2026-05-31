@@ -204,6 +204,7 @@ test.describe('Immich demo (extension loaded)', () => {
     const overlay = firstThumb.locator('[data-immich-ui-tweak-uploader]');
     await expect(overlay).toBeVisible({ timeout: 15_000 });
     await expect(overlay.locator('.immich-ui-tweak-avatar')).toBeVisible({ timeout: 15_000 });
+    await expect(overlay).toHaveCSS('z-index', 'auto');
   });
 
   test('folders page: first thumbnail has uploader overlay', async ({ context, extensionId }) => {
