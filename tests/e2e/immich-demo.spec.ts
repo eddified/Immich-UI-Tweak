@@ -12,6 +12,7 @@ import { expect, test } from './fixtures';
 const DEMO = demoOrigin();
 const PARTNERS = `${DEMO}/partners/743f389e-ee80-4682-8d56-2cd45f692c40`;
 const SEARCH_CARS = `${DEMO}/search?query=%7B%22query%22%3A%22cars%22%7D`;
+const FOLDER_08_01 = `${DEMO}/folders?path=%2Fdata%2Fupload%2F6bbe2767-7851-461a-aa2d-afbd3460aa85%2F08%2F01`;
 /** Partner Mich asset for cold `/photos/:id` (owner ≠ logged-in demo user); id from partner timeline API. */
 const PARTNER_PHOTO_COLD = `${DEMO}/photos/41908224-87c9-4588-bde1-b89c77f122fd`;
 
@@ -195,6 +196,34 @@ test.describe('Immich demo (extension loaded)', () => {
 
     await appPage.goto(SEARCH_CARS, { waitUntil: 'load', timeout: 60_000 });
     await appPage.reload({ waitUntil: 'load', timeout: 60_000 });
+
+    const firstThumb = appPage.locator('[data-asset]').first();
+    await expect(firstThumb).toBeVisible({ timeout: 30_000 });
+    await expect(firstThumb).toHaveAttribute('data-asset', /[0-9a-f-]{8}-/i);
+
+    const overlay = firstThumb.locator('[data-immich-ui-tweak-uploader]');
+    await expect(overlay).toBeVisible({ timeout: 15_000 });
+    await expect(overlay.locator('.immich-ui-tweak-avatar')).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('folders page: first thumbnail has uploader overlay', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await openExtensionOptions(page, extensionId);
+    await page.locator('#show-partner-icons').setChecked(true);
+    await page.locator('#show-own-profile-icon').setChecked(true);
+    await page.locator('#url-list input').first().fill(`${demoOrigin()}/`);
+    const row = page.locator('#mapping-body tr').first();
+    await row.locator('input').nth(0).fill('/var/test');
+    await row.locator('input').nth(1).fill('/data/upload');
+    await page.locator('#replace-folders-page-names').setChecked(true);
+    await page.locator('#save').click();
+    await page.locator('#save-status').filter({ hasText: /Saved/i }).waitFor({ state: 'visible', timeout: 5_000 });
+    await page.close();
+
+    const appPage = await context.newPage();
+    await loginDemoImmich(appPage);
+
+    await appPage.goto(FOLDER_08_01, { waitUntil: 'load', timeout: 60_000 });
 
     const firstThumb = appPage.locator('[data-asset]').first();
     await expect(firstThumb).toBeVisible({ timeout: 30_000 });

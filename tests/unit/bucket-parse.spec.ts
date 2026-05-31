@@ -35,6 +35,17 @@ describe('parseOwnerPairsFromJson', () => {
     ]);
   });
 
+  it('reads folder asset arrays', () => {
+    const pairs = parseOwnerPairsFromJson([
+      { id: 'f1', ownerId: 'u1' },
+      { id: 'f2', ownerId: 'u2' },
+    ]);
+    expect(pairs).toEqual([
+      { assetId: 'f1', ownerId: 'u1' },
+      { assetId: 'f2', ownerId: 'u2' },
+    ]);
+  });
+
   it('reads single asset', () => {
     expect(parseOwnerPairsFromJson({ id: 'one', ownerId: 'two' })).toEqual([
       { assetId: 'one', ownerId: 'two' },

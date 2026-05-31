@@ -30,6 +30,7 @@ function shouldCloneApiResponse(urlStr: string, method: string): boolean {
     if (p === '/api/users/me') return true;
     if (p.includes('/api/timeline/bucket')) return true;
     if (p.includes('/api/search/')) return true;
+    if (p === '/api/view/folder') return true;
     if (/^\/api\/assets\/[0-9a-f-]{36}\/?$/i.test(p)) return true;
     if (/^\/api\/users\/[0-9a-f-]{36}\/?$/i.test(p)) return m === 'GET';
     return false;

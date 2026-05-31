@@ -46,6 +46,10 @@ export function parseOwnerPairsFromJson(data: unknown): OwnerPair[] {
 
   if (typeof body !== 'object' || body === null) return [];
 
+  if (Array.isArray(body)) {
+    return fromAssetItems(body);
+  }
+
   const o = body as Record<string, unknown>;
 
   if ('data' in o && o.data !== undefined) {
