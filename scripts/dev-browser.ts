@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import type { BrowserContext } from '@playwright/test';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-process.env.PLAYWRIGHT_BROWSERS_PATH ??= path.join(root, '.playwright-browsers');
+await import('./configure-playwright-env.mjs').then(({ configurePlaywrightEnv }) => configurePlaywrightEnv());
 
 const { chromium } = await import('@playwright/test');
 const { applyDemoExtensionSettings, demoOrigin, loginDemoImmich } = await import('./demo-e2e-preset.js');

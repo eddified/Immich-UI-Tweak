@@ -12,6 +12,7 @@ import { expect, test } from './fixtures';
 const DEMO = demoOrigin();
 const PARTNERS = `${DEMO}/partners/743f389e-ee80-4682-8d56-2cd45f692c40`;
 const SEARCH_CARS = `${DEMO}/search?query=%7B%22query%22%3A%22cars%22%7D`;
+const SEARCH_JAN_31_VIDEOS = `${DEMO}/search?query=%7B%22takenAfter%22%3A%222025-01-31T00%3A00%3A00.000Z%22%2C%22takenBefore%22%3A%222025-01-31T23%3A59%3A59.999Z%22%2C%22type%22%3A%22VIDEO%22%7D`;
 const FOLDER_08_01 = `${DEMO}/folders?path=%2Fdata%2Fupload%2F6bbe2767-7851-461a-aa2d-afbd3460aa85%2F08%2F01`;
 /** Partner Mich asset for cold `/photos/:id` (owner ≠ logged-in demo user); id from partner timeline API. */
 const PARTNER_PHOTO_COLD = `${DEMO}/photos/41908224-87c9-4588-bde1-b89c77f122fd`;
@@ -197,7 +198,7 @@ test.describe('Immich demo (extension loaded)', () => {
     await appPage.goto(SEARCH_CARS, { waitUntil: 'load', timeout: 60_000 });
     await appPage.reload({ waitUntil: 'load', timeout: 60_000 });
 
-    const firstThumb = appPage.locator('[data-asset]').first();
+    const firstThumb = appPage.locator('[data-asset]').filter({ hasNot: appPage.locator('svg') }).first();
     await expect(firstThumb).toBeVisible({ timeout: 30_000 });
     await expect(firstThumb).toHaveAttribute('data-asset', /[0-9a-f-]{8}-/i);
 
@@ -205,6 +206,67 @@ test.describe('Immich demo (extension loaded)', () => {
     await expect(overlay).toBeVisible({ timeout: 15_000 });
     await expect(overlay.locator('.immich-ui-tweak-avatar')).toBeVisible({ timeout: 15_000 });
     await expect(overlay).toHaveCSS('z-index', 'auto');
+  });
+
+  test('video search: uploader overlay does not cover Immich thumbnail icons', async ({
+    context,
+    extensionId,
+  }) => {
+    const page = await context.newPage();
+    await openExtensionOptions(page, extensionId);
+    await page.locator('#show-partner-icons').setChecked(true);
+    await page.locator('#show-own-profile-icon').setChecked(true);
+    await page.locator('#url-list input').first().fill(`${demoOrigin()}/`);
+    await page.locator('#save').click();
+    await page.locator('#save-status').filter({ hasText: /Saved/i }).waitFor({
+      state: 'visible',
+      timeout: 5_000,
+    });
+    await page.close();
+
+    const appPage = await context.newPage();
+    await loginDemoImmich(appPage);
+    await appPage.goto(SEARCH_JAN_31_VIDEOS, { waitUntil: 'load', timeout: 60_000 });
+
+    const firstThumb = appPage.locator('[data-asset]').first();
+    await expect(firstThumb).toBeVisible({ timeout: 30_000 });
+
+    const overlay = firstThumb.locator('[data-immich-ui-tweak-uploader]');
+    const badge = overlay.locator('.immich-ui-tweak-uploader-badge');
+    await expect(badge.locator('.immich-ui-tweak-avatar')).toBeVisible({ timeout: 15_000 });
+
+    const boxes = await firstThumb.evaluate((thumb) => {
+      const badgeEl = thumb.querySelector<HTMLElement>('.immich-ui-tweak-uploader-badge');
+      const badgeBox = badgeEl?.getBoundingClientRect();
+      const iconBoxes = Array.from(thumb.querySelectorAll<SVGElement>('svg'))
+        .filter((svg) => !svg.closest('.immich-ui-tweak-uploader-overlay'))
+        .map((svg) => {
+          const r = svg.getBoundingClientRect();
+          return { x: r.x, y: r.y, width: r.width, height: r.height };
+        })
+        .filter((r) => r.width > 0 && r.height > 0);
+
+      return {
+        badge: badgeBox
+          ? { x: badgeBox.x, y: badgeBox.y, width: badgeBox.width, height: badgeBox.height }
+          : null,
+        icons: iconBoxes,
+      };
+    });
+
+    expect(boxes.badge).toBeTruthy();
+    expect(boxes.icons.length, 'expected at least one Immich video/live/stack thumbnail icon').toBeGreaterThan(0);
+    const leftmostIconX = Math.min(...boxes.icons.map((icon) => icon.x));
+    expect(boxes.badge!.x + boxes.badge!.width).toBeLessThanOrEqual(leftmostIconX + 1);
+    for (const icon of boxes.icons) {
+      const badge = boxes.badge!;
+      const overlaps =
+        badge.x < icon.x + icon.width &&
+        badge.x + badge.width > icon.x &&
+        badge.y < icon.y + icon.height &&
+        badge.y + badge.height > icon.y;
+      expect(overlaps).toBe(false);
+    }
   });
 
   test('folders page: first thumbnail has uploader overlay', async ({ context, extensionId }) => {

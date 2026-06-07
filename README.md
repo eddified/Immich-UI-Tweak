@@ -84,3 +84,4 @@ Headed or UI mode: `npm run test:e2e:headed`, `npm run test:e2e:ui`.
 ## License
 
 [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+

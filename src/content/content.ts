@@ -318,12 +318,11 @@ function removeExtensionElements(): void {
   sessionUserId = undefined;
 
   document.querySelectorAll('.immich-ui-tweak-uploader-overlay').forEach((el) => el.remove());
+  document.querySelectorAll('[data-immich-ui-tweak-uploader-row]').forEach((el) => el.remove());
+  document.querySelectorAll('[data-immich-ui-tweak-uploader-layer]').forEach((el) => el.remove());
   document.querySelectorAll('.immich-ui-tweak-viewer-avatar').forEach((el) => el.remove());
   document.querySelectorAll('[data-immich-ui-tweak-google-maps-row]').forEach((el) => el.remove());
   removeGoogleMapsEmbedElements();
-  document.querySelectorAll('[data-asset].immich-ui-tweak-thumb-anchor').forEach((el) => {
-    el.classList.remove('immich-ui-tweak-thumb-anchor');
-  });
 
   removeInjectedPartnerPathAllViewers();
   cleanupDetailPanelDetailRowsInDocument();
@@ -474,30 +473,106 @@ function scheduleUploaderBadge(container: HTMLElement, ownerId: string, size: 't
   })();
 }
 
-/**
- * Immich stack badge: top-right flex row with locale-formatted count + burst icon (thumbnail.svelte).
- * When present, shift our uploader overlay left so it does not cover the count or icon.
- */
-function thumbnailHasStackBadge(thumb: HTMLElement): boolean {
-  for (const wrap of thumb.querySelectorAll<HTMLElement>('div.absolute')) {
-    const cn = wrap.className;
-    if (typeof cn !== 'string' || !cn.includes('flex') || !cn.includes('place-items-center')) continue;
-    if (!cn.includes('top-0') && !cn.includes('top-7')) continue;
-    if (!cn.includes('inset-e-') && !cn.includes('inset-inline-end-')) continue;
-    const inner = wrap.querySelector<HTMLElement>('span.flex.place-items-center.gap-1');
-    if (!inner) continue;
-    const numEl = inner.querySelector('p');
-    const svg = inner.querySelector('svg');
-    if (!numEl || !svg) continue;
-    const n = (numEl.textContent ?? '').replace(/\s/g, '');
-    if (/^[\d,]+$/.test(n)) return true;
+const THUMBNAIL_ICON_ROW_CLASSES = [
+  '@container',
+  'absolute',
+  'inset-x-0',
+  'top-0',
+  'flex',
+  'justify-end',
+  'place-items-center',
+  'gap-1',
+  'text-white',
+  'text-shadow-[1px_1px_6px_rgb(0_0_0)]',
+].join(' ');
+
+const THUMBNAIL_UPLOADER_PLACEMENT_CLASSES = [
+  'immich-ui-tweak-uploader-overlay',
+  'pt-2',
+  '@max-[99px]:scale-75',
+  '@max-[99px]:pt-1',
+  'drop-shadow-[1px_1px_6px_rgb(0_0_0)]',
+].join(' ');
+
+const THUMBNAIL_UPLOADER_SOLO_PLACEMENT_CLASSES = [
+  THUMBNAIL_UPLOADER_PLACEMENT_CLASSES,
+  'pe-2',
+  '@max-[99px]:pe-1',
+].join(' ');
+
+const THUMBNAIL_ICON_LAYER_CLASSES = [
+  'absolute',
+  'h-full',
+  'w-full',
+  'pointer-events-none',
+  'group-focus-visible:rounded-lg',
+].join(' ');
+
+function thumbnailIconOverlayLayer(thumb: HTMLElement): HTMLElement {
+  for (const layer of thumb.querySelectorAll<HTMLElement>('div.pointer-events-none')) {
+    const cn = layer.className;
+    if (typeof cn !== 'string') continue;
+    if (!cn.includes('absolute') || !cn.includes('h-full') || !cn.includes('w-full')) continue;
+    return layer;
   }
-  return false;
+
+  const media = thumb.querySelector<HTMLImageElement | HTMLVideoElement>('img, video');
+  const mediaLayer = media?.parentElement;
+  const layer = document.createElement('div');
+  layer.className = THUMBNAIL_ICON_LAYER_CLASSES;
+  layer.dataset.immichUiTweakUploaderLayer = '';
+  if (mediaLayer) {
+    mediaLayer.insertBefore(layer, media.nextSibling);
+  } else {
+    thumb.appendChild(layer);
+  }
+  return layer;
+}
+
+function thumbnailTopRightIconRow(thumb: HTMLElement, iconLayer: HTMLElement): HTMLElement {
+  for (const row of iconLayer.querySelectorAll<HTMLElement>('div.absolute')) {
+    const cn = row.className;
+    if (typeof cn !== 'string') continue;
+    if (
+      cn.includes('inset-x-0') &&
+      cn.includes('top-0') &&
+      cn.includes('flex') &&
+      cn.includes('justify-end') &&
+      cn.includes('place-items-center')
+    ) {
+      return row;
+    }
+  }
+
+  const row = document.createElement('div');
+  row.className = THUMBNAIL_ICON_ROW_CLASSES;
+  row.dataset.immichUiTweakUploaderRow = '';
+  iconLayer.appendChild(row);
+  return row;
+}
+
+function removeThumbnailUploaderOverlay(thumb: HTMLElement): void {
+  const placement = thumb.querySelector<HTMLElement>('[data-immich-ui-tweak-uploader]');
+  const row = placement?.parentElement;
+  const layer = row?.parentElement;
+  placement?.remove();
+  if (row instanceof HTMLElement && row.dataset.immichUiTweakUploaderRow !== undefined && row.childElementCount === 0) {
+    row.remove();
+  }
+  if (
+    layer instanceof HTMLElement &&
+    layer.dataset.immichUiTweakUploaderLayer !== undefined &&
+    layer.childElementCount === 0
+  ) {
+    layer.remove();
+  }
 }
 
 function updateThumbnailOverlays(): void {
   if (!settings.showPartnerIcons) {
     document.querySelectorAll('.immich-ui-tweak-uploader-overlay').forEach((el) => el.remove());
+    document.querySelectorAll('[data-immich-ui-tweak-uploader-row]').forEach((el) => el.remove());
+    document.querySelectorAll('[data-immich-ui-tweak-uploader-layer]').forEach((el) => el.remove());
     return;
   }
 
@@ -508,28 +583,38 @@ function updateThumbnailOverlays(): void {
 
     const ownerId = ownerByAsset.get(assetId);
     if (!ownerId) {
-      thumb.querySelector('.immich-ui-tweak-uploader-overlay')?.remove();
-      thumb.classList.remove('immich-ui-tweak-thumb-anchor');
+      removeThumbnailUploaderOverlay(thumb);
       return;
     }
 
     if (!shouldShowUploaderOverlay(ownerId)) {
-      thumb.querySelector('.immich-ui-tweak-uploader-overlay')?.remove();
-      thumb.classList.remove('immich-ui-tweak-thumb-anchor');
+      removeThumbnailUploaderOverlay(thumb);
       return;
     }
 
-    thumb.classList.add('immich-ui-tweak-thumb-anchor');
+    const iconLayer = thumbnailIconOverlayLayer(thumb);
+    const iconRow = thumbnailTopRightIconRow(thumb, iconLayer);
 
-    let overlay = thumb.querySelector<HTMLElement>('.immich-ui-tweak-uploader-overlay');
-    if (!overlay) {
-      overlay = document.createElement('div');
-      overlay.className = 'immich-ui-tweak-uploader-overlay';
-      overlay.dataset.immichUiTweakUploader = '';
-      thumb.appendChild(overlay);
+    let placement = thumb.querySelector<HTMLElement>('[data-immich-ui-tweak-uploader]');
+    if (!placement) {
+      placement = document.createElement('span');
+      placement.dataset.immichUiTweakUploader = '';
     }
-    overlay.classList.toggle('immich-ui-tweak-uploader-overlay--stack', thumbnailHasStackBadge(thumb));
-    scheduleUploaderBadge(overlay, ownerId, 'thumb');
+    const firstNativeIcon = Array.from(iconRow.children).find((el) => el !== placement);
+    placement.className = firstNativeIcon
+      ? THUMBNAIL_UPLOADER_PLACEMENT_CLASSES
+      : THUMBNAIL_UPLOADER_SOLO_PLACEMENT_CLASSES;
+    if (placement.parentElement !== iconRow || placement.nextElementSibling !== firstNativeIcon) {
+      iconRow.insertBefore(placement, firstNativeIcon ?? null);
+    }
+
+    let badge = placement.querySelector<HTMLElement>('.immich-ui-tweak-uploader-badge');
+    if (!badge) {
+      badge = document.createElement('div');
+      placement.replaceChildren(badge);
+    }
+    badge.className = 'immich-ui-tweak-uploader-badge';
+    scheduleUploaderBadge(badge, ownerId, 'thumb');
   });
 }
 

@@ -1,11 +1,11 @@
 import { defineConfig } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { configurePlaywrightEnv } from './scripts/configure-playwright-env.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 
-// Same path for `playwright install` and `playwright test` (avoids mismatched PLAYWRIGHT_BROWSERS_PATH in sandboxes/CI).
-process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(dir, '.playwright-browsers');
+configurePlaywrightEnv();
 
 export default defineConfig({
   testDir: path.join(dir, 'tests', 'e2e'),

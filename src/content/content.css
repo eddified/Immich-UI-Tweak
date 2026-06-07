@@ -1,23 +1,15 @@
-[data-asset].immich-ui-tweak-thumb-anchor {
-  position: relative !important;
+.immich-ui-tweak-uploader-overlay {
+  pointer-events: none;
 }
 
-.immich-ui-tweak-uploader-overlay {
-  position: absolute;
-  top: 6px;
-  right: 6px;
+.immich-ui-tweak-uploader-badge {
   width: 28px;
   height: 28px;
   border-radius: 9999px;
   overflow: hidden;
-  pointer-events: none;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.35);
-}
-
-/* Leave room for stack count + burst icon (Immich thumbnail.svelte: top-0 inset-e-0, icon 24px, pe-2 pt-2). */
-.immich-ui-tweak-uploader-overlay--stack {
-  right: 62px;
+  flex-shrink: 0;
 }
 
 .immich-ui-tweak-viewer-avatar {
