@@ -1,0 +1,5 @@
+{
+  "name": "immich-ui-tweak-shared",
+  "private": true,
+  "type": "module"
+}

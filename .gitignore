@@ -1,9 +1,14 @@
 .worktrees/
 node_modules/
-dist/
-.chrome-profile-dev/
+chrome/node_modules/
+firefox/node_modules/
+chrome/dist/
+firefox/dist/
+chrome/.chrome-profile-dev/
+firefox/.firefox-profile-dev/
 test-results/
 playwright-report/
 playwright/.cache/
 .playwright-browsers/
 *.log
+.tokensave

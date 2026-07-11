@@ -1,0 +1,268 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: system-ui, sans-serif;
+  margin: 0;
+  padding: 24px;
+  background: #f4f4f5;
+  color: #18181b;
+}
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.options-logo {
+  display: block;
+  height: auto;
+  margin: 0 auto 20px;
+}
+
+.options-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.65rem;
+  row-gap: 0.2rem;
+  margin-bottom: 20px;
+}
+
+.options-title-row h1 {
+  font-size: 1.5rem;
+  margin: 0;
+}
+
+.firefox-site-access {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  background: #fffbeb;
+}
+
+.firefox-site-access.granted {
+  border-color: #16a34a;
+  background: #f0fdf4;
+}
+
+.firefox-site-access #grant-site-access {
+  margin-top: 8px;
+}
+
+.options-version {
+  font-size: 0.7rem;
+  color: #a1a1aa;
+  font-weight: 400;
+}
+
+h2 {
+  font-size: 1.1rem;
+  margin: 24px 0 8px;
+}
+
+section {
+  margin-bottom: 20px;
+}
+
+.hint {
+  font-size: 0.85rem;
+  color: #52525b;
+  margin: 0 0 12px;
+}
+
+.hint kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.88em;
+  padding: 0.12em 0.4em;
+  border: 1px solid #d4d4d8;
+  border-radius: 4px;
+  background: #fafafa;
+  box-shadow: 0 1px 0 #e4e4e7;
+}
+
+#url-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+}
+
+#url-list li {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+#url-list input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 12px;
+}
+
+th {
+  text-align: left;
+  font-size: 0.8rem;
+  color: #52525b;
+  padding-bottom: 6px;
+}
+
+td {
+  padding: 4px 8px 4px 0;
+  vertical-align: middle;
+}
+
+td input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+}
+
+button {
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid #d4d4d8;
+  background: #fff;
+  cursor: pointer;
+}
+
+button.primary {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+  font-weight: 600;
+}
+
+button.danger {
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+/* Same font size as section <h2> (e.g. "Docker File Mounts") */
+section > .checkbox-row:not(.checkbox-row-nested) {
+  font-size: 1.1rem;
+}
+
+.checkbox-row-nested {
+  margin-top: 10px;
+  margin-left: 1.75rem;
+}
+
+.replace-folders-page-names-row {
+  margin-top: 14px;
+  font-size: 0.95rem !important;
+  align-items: flex-start;
+}
+
+.replace-folders-page-names-row input {
+  margin-top: 2px;
+}
+
+.options-save-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.options-save-row #save-status {
+  flex: 1 1 auto;
+  min-width: min(12rem, 100%);
+  min-height: 1.25rem;
+  margin: 0;
+  font-size: 0.9rem;
+  color: #16a34a;
+  text-align: left;
+}
+
+.options-footer {
+  max-width: 720px;
+  margin: 28px auto 0;
+  padding-top: 16px;
+  border-top: 1px solid #e4e4e7;
+  text-align: center;
+}
+
+.options-privacy {
+  margin-bottom: 18px;
+  text-align: left;
+}
+
+h2.options-privacy-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0 0 6px;
+  color: #3f3f46;
+}
+
+.options-privacy-text {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: #52525b;
+  margin: 0;
+}
+
+.options-privacy-text em {
+  font-style: italic;
+  font-weight: 600;
+  color: #3f3f46;
+}
+
+.options-footer-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: #52525b;
+  text-decoration: none;
+}
+
+.options-footer-link:hover {
+  color: #18181b;
+  text-decoration: underline;
+}
+
+.options-github-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.detail-row-mode {
+  margin: 0 0 16px;
+  padding: 10px 12px 12px;
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.detail-row-mode-legend {
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0 6px;
+}
+
+.detail-row-mode label {
+  display: block;
+  margin: 6px 0 0 2px;
+  font-size: 0.92rem;
+}

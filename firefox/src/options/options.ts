@@ -1,0 +1,369 @@
+import { filterCompleteMappings, normalizePathMappingRow } from '../shared/path-mapping';
+import {
+  DEFAULT_SETTINGS,
+  isDetailRowPanelMode,
+  MAX_ENABLED_URLS,
+  readDetailRowPanelModeForKind,
+  STORAGE_KEYS,
+  type DetailRowPanelMode,
+  type ExtensionSettings,
+  type PathMappingRow,
+} from '../shared/storage-types';
+import {
+  firefoxHostPermissionsOptIn,
+  hasHostPermissionsForEnabledUrls,
+  requestHostPermissionsForEnabledUrls,
+} from '../shared/host-permissions';
+import { enabledUrlsToMatchPatterns, normalizeInstanceUrl } from '../shared/url-match';
+
+const urlList = document.getElementById('url-list') as HTMLUListElement;
+const mappingBody = document.getElementById('mapping-body') as HTMLTableSectionElement;
+const addUrlBtn = document.getElementById('add-url') as HTMLButtonElement;
+const addMappingBtn = document.getElementById('add-mapping') as HTMLButtonElement;
+const saveBtn = document.getElementById('save') as HTMLButtonElement;
+const showPartnerIcons = document.getElementById('show-partner-icons') as HTMLInputElement;
+const showOwnProfileIcon = document.getElementById('show-own-profile-icon') as HTMLInputElement;
+const replaceFoldersPageNames = document.getElementById('replace-folders-page-names') as HTMLInputElement;
+const autoOpenFileLocation = document.getElementById('auto-open-file-location') as HTMLInputElement;
+const remapSlashToFocusSearch = document.getElementById('remap-slash-to-focus-search') as HTMLInputElement;
+const googleMapsLinkInInfoPanel = document.getElementById('google-maps-link-info-panel') as HTMLInputElement;
+const googleMapsEmbedInsteadOfOsmInInfoPanel = document.getElementById(
+  'google-maps-embed-instead-of-osm-info-panel',
+) as HTMLInputElement;
+const infoPanelLargeDescriptionField = document.getElementById(
+  'info-panel-large-description-field',
+) as HTMLInputElement;
+
+const DETAIL_ROW_FILE_GROUP = 'detail-row-file';
+const DETAIL_ROW_CAMERA_GROUP = 'detail-row-camera';
+const DETAIL_ROW_LENS_GROUP = 'detail-row-lens';
+
+function setDetailRowModeRadios(groupName: string, mode: DetailRowPanelMode): void {
+  const input = document.querySelector<HTMLInputElement>(`input[name="${groupName}"][value="${mode}"]`);
+  if (input) input.checked = true;
+}
+
+function selectedDetailRowMode(groupName: string): DetailRowPanelMode {
+  const el = document.querySelector<HTMLInputElement>(`input[name="${groupName}"]:checked`);
+  const v = el?.value;
+  return isDetailRowPanelMode(v) ? v : 'open';
+}
+const saveStatus = document.getElementById('save-status') as HTMLParagraphElement;
+const appVersion = document.getElementById('app-version') as HTMLSpanElement;
+const firefoxSiteAccess = document.getElementById('firefox-site-access') as HTMLElement;
+const firefoxSiteAccessStatus = document.getElementById('firefox-site-access-status') as HTMLParagraphElement;
+const grantSiteAccessBtn = document.getElementById('grant-site-access') as HTMLButtonElement;
+appVersion.textContent = `Version ${chrome.runtime.getManifest().version}`;
+
+async function refreshFirefoxSiteAccessUi(urls: string[]): Promise<void> {
+  if (!firefoxHostPermissionsOptIn()) {
+    firefoxSiteAccess.hidden = true;
+    return;
+  }
+  firefoxSiteAccess.hidden = false;
+  if (enabledUrlsToMatchPatterns(urls).length === 0) {
+    firefoxSiteAccessStatus.textContent = 'Add at least one Immich URL below, then allow site access.';
+    firefoxSiteAccess.classList.remove('granted');
+    grantSiteAccessBtn.disabled = true;
+    grantSiteAccessBtn.textContent = 'Allow on Immich URLs';
+    return;
+  }
+  const granted = await hasHostPermissionsForEnabledUrls(urls);
+  if (granted) {
+    firefoxSiteAccessStatus.textContent = 'Site access granted for your configured Immich URLs.';
+    firefoxSiteAccess.classList.add('granted');
+    grantSiteAccessBtn.disabled = true;
+    grantSiteAccessBtn.textContent = 'Allowed';
+  } else {
+    firefoxSiteAccessStatus.textContent = 'Site access is required before the add-on can run on Immich pages.';
+    firefoxSiteAccess.classList.remove('granted');
+    grantSiteAccessBtn.disabled = false;
+    grantSiteAccessBtn.textContent = 'Allow on Immich URLs';
+  }
+}
+
+function syncOwnProfileCheckboxEnabled(): void {
+  showOwnProfileIcon.disabled = !showPartnerIcons.checked;
+}
+
+function rowUrl(value: string): HTMLLIElement {
+  const li = document.createElement('li');
+  const input = document.createElement('input');
+  input.type = 'url';
+  input.placeholder = 'https://immich.example.com';
+  input.value = value;
+  const rm = document.createElement('button');
+  rm.type = 'button';
+  rm.className = 'danger';
+  rm.textContent = 'Remove';
+  rm.addEventListener('click', () => li.remove());
+  li.append(input, rm);
+  return li;
+}
+
+function rowMapping(localPath: string, immichPath: string): HTMLTableRowElement {
+  const tr = document.createElement('tr');
+  const tdL = document.createElement('td');
+  const tdR = document.createElement('td');
+  const tdX = document.createElement('td');
+  const inL = document.createElement('input');
+  inL.type = 'text';
+  inL.placeholder = '/var/lib/immich';
+  inL.value = localPath;
+  const inR = document.createElement('input');
+  inR.type = 'text';
+  inR.placeholder = '/usr/src/app/upload';
+  inR.value = immichPath;
+  const rm = document.createElement('button');
+  rm.type = 'button';
+  rm.className = 'danger';
+  rm.textContent = '×';
+  rm.addEventListener('click', () => tr.remove());
+  tdL.append(inL);
+  tdR.append(inR);
+  tdX.append(rm);
+  tr.append(tdL, tdR, tdX);
+  return tr;
+}
+
+function collectUrls(): string[] {
+  const inputs = urlList.querySelectorAll<HTMLInputElement>('input');
+  const out: string[] = [];
+  inputs.forEach((i) => {
+    const n = normalizeInstanceUrl(i.value);
+    if (n) out.push(n);
+  });
+  return out.slice(0, MAX_ENABLED_URLS);
+}
+
+function collectMappings(): PathMappingRow[] {
+  const rows = mappingBody.querySelectorAll('tr');
+  const out: PathMappingRow[] = [];
+  rows.forEach((tr) => {
+    const ins = tr.querySelectorAll<HTMLInputElement>('input');
+    if (ins.length >= 2) {
+      out.push({ localPath: ins[0].value, immichPath: ins[1].value });
+    }
+  });
+  return filterCompleteMappings(out);
+}
+
+function render(settings: ExtensionSettings): void {
+  urlList.replaceChildren();
+  const urls = settings.enabledUrls.length ? settings.enabledUrls : [''];
+  urls.slice(0, MAX_ENABLED_URLS).forEach((u) => urlList.append(rowUrl(u)));
+
+  mappingBody.replaceChildren();
+  if (settings.pathMappings.length === 0) {
+    mappingBody.append(rowMapping('', ''));
+  } else {
+    settings.pathMappings.forEach((m) => mappingBody.append(rowMapping(m.localPath, m.immichPath)));
+  }
+
+  showPartnerIcons.checked = settings.showPartnerIcons;
+  showOwnProfileIcon.checked = settings.showOwnProfileIcon;
+  replaceFoldersPageNames.checked = settings.replaceFoldersPageNames;
+  autoOpenFileLocation.checked = settings.autoOpenFileLocation;
+  remapSlashToFocusSearch.checked = settings.remapSlashToFocusSearch;
+  googleMapsLinkInInfoPanel.checked = settings.googleMapsLinkInInfoPanel;
+  googleMapsEmbedInsteadOfOsmInInfoPanel.checked = settings.googleMapsEmbedInsteadOfOsmInInfoPanel;
+  infoPanelLargeDescriptionField.checked = settings.infoPanelLargeDescriptionField;
+  setDetailRowModeRadios(DETAIL_ROW_FILE_GROUP, settings.infoPanelDetailRowFile);
+  setDetailRowModeRadios(DETAIL_ROW_CAMERA_GROUP, settings.infoPanelDetailRowCamera);
+  setDetailRowModeRadios(DETAIL_ROW_LENS_GROUP, settings.infoPanelDetailRowLens);
+  syncOwnProfileCheckboxEnabled();
+}
+
+function load(): void {
+  chrome.storage.sync.get(
+    [
+      STORAGE_KEYS.enabledUrls,
+      STORAGE_KEYS.pathMappings,
+      STORAGE_KEYS.replaceFoldersPageNames,
+      STORAGE_KEYS.showPartnerIcons,
+      STORAGE_KEYS.showOwnProfileIcon,
+      STORAGE_KEYS.autoOpenFileLocation,
+      STORAGE_KEYS.remapSlashToFocusSearch,
+      STORAGE_KEYS.googleMapsLinkInInfoPanel,
+      STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel,
+      STORAGE_KEYS.infoPanelDetailRowFile,
+      STORAGE_KEYS.infoPanelDetailRowCamera,
+      STORAGE_KEYS.infoPanelDetailRowLens,
+      STORAGE_KEYS.infoPanelLargeDescriptionField,
+      'infoPanelDefaultCollapseFileRow',
+      'infoPanelDefaultCollapseCameraRow',
+      'infoPanelDefaultCollapseLensRow',
+    ],
+    (sync) => {
+      const syncRec = sync as Record<string, unknown>;
+      const settings: ExtensionSettings = {
+        enabledUrls: Array.isArray(sync[STORAGE_KEYS.enabledUrls])
+          ? (sync[STORAGE_KEYS.enabledUrls] as string[])
+          : DEFAULT_SETTINGS.enabledUrls,
+        pathMappings: (Array.isArray(sync[STORAGE_KEYS.pathMappings])
+          ? (sync[STORAGE_KEYS.pathMappings] as PathMappingRow[])
+          : DEFAULT_SETTINGS.pathMappings
+        ).map(normalizePathMappingRow),
+        replaceFoldersPageNames:
+          typeof sync[STORAGE_KEYS.replaceFoldersPageNames] === 'boolean'
+            ? (sync[STORAGE_KEYS.replaceFoldersPageNames] as boolean)
+            : DEFAULT_SETTINGS.replaceFoldersPageNames,
+        showPartnerIcons:
+          typeof sync[STORAGE_KEYS.showPartnerIcons] === 'boolean'
+            ? (sync[STORAGE_KEYS.showPartnerIcons] as boolean)
+            : DEFAULT_SETTINGS.showPartnerIcons,
+        showOwnProfileIcon:
+          typeof sync[STORAGE_KEYS.showOwnProfileIcon] === 'boolean'
+            ? (sync[STORAGE_KEYS.showOwnProfileIcon] as boolean)
+            : DEFAULT_SETTINGS.showOwnProfileIcon,
+        autoOpenFileLocation:
+          typeof sync[STORAGE_KEYS.autoOpenFileLocation] === 'boolean'
+            ? (sync[STORAGE_KEYS.autoOpenFileLocation] as boolean)
+            : DEFAULT_SETTINGS.autoOpenFileLocation,
+        remapSlashToFocusSearch:
+          typeof sync[STORAGE_KEYS.remapSlashToFocusSearch] === 'boolean'
+            ? (sync[STORAGE_KEYS.remapSlashToFocusSearch] as boolean)
+            : DEFAULT_SETTINGS.remapSlashToFocusSearch,
+        googleMapsLinkInInfoPanel:
+          typeof sync[STORAGE_KEYS.googleMapsLinkInInfoPanel] === 'boolean'
+            ? (sync[STORAGE_KEYS.googleMapsLinkInInfoPanel] as boolean)
+            : DEFAULT_SETTINGS.googleMapsLinkInInfoPanel,
+        googleMapsEmbedInsteadOfOsmInInfoPanel:
+          typeof sync[STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel] === 'boolean'
+            ? (sync[STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel] as boolean)
+            : DEFAULT_SETTINGS.googleMapsEmbedInsteadOfOsmInInfoPanel,
+        infoPanelDetailRowFile: readDetailRowPanelModeForKind(syncRec, 'file'),
+        infoPanelDetailRowCamera: readDetailRowPanelModeForKind(syncRec, 'camera'),
+        infoPanelDetailRowLens: readDetailRowPanelModeForKind(syncRec, 'lens'),
+        infoPanelLargeDescriptionField:
+          typeof sync[STORAGE_KEYS.infoPanelLargeDescriptionField] === 'boolean'
+            ? (sync[STORAGE_KEYS.infoPanelLargeDescriptionField] as boolean)
+            : DEFAULT_SETTINGS.infoPanelLargeDescriptionField,
+      };
+      const empty = Object.keys(sync).length === 0;
+      if (empty) {
+        void chrome.storage.sync.set({
+          [STORAGE_KEYS.enabledUrls]: DEFAULT_SETTINGS.enabledUrls,
+          [STORAGE_KEYS.pathMappings]: DEFAULT_SETTINGS.pathMappings,
+          [STORAGE_KEYS.replaceFoldersPageNames]: DEFAULT_SETTINGS.replaceFoldersPageNames,
+          [STORAGE_KEYS.showPartnerIcons]: DEFAULT_SETTINGS.showPartnerIcons,
+          [STORAGE_KEYS.showOwnProfileIcon]: DEFAULT_SETTINGS.showOwnProfileIcon,
+          [STORAGE_KEYS.autoOpenFileLocation]: DEFAULT_SETTINGS.autoOpenFileLocation,
+          [STORAGE_KEYS.remapSlashToFocusSearch]: DEFAULT_SETTINGS.remapSlashToFocusSearch,
+          [STORAGE_KEYS.googleMapsLinkInInfoPanel]: DEFAULT_SETTINGS.googleMapsLinkInInfoPanel,
+          [STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel]:
+            DEFAULT_SETTINGS.googleMapsEmbedInsteadOfOsmInInfoPanel,
+          [STORAGE_KEYS.infoPanelDetailRowFile]: DEFAULT_SETTINGS.infoPanelDetailRowFile,
+          [STORAGE_KEYS.infoPanelDetailRowCamera]: DEFAULT_SETTINGS.infoPanelDetailRowCamera,
+          [STORAGE_KEYS.infoPanelDetailRowLens]: DEFAULT_SETTINGS.infoPanelDetailRowLens,
+          [STORAGE_KEYS.infoPanelLargeDescriptionField]: DEFAULT_SETTINGS.infoPanelLargeDescriptionField,
+        });
+        render(DEFAULT_SETTINGS);
+        void refreshFirefoxSiteAccessUi(DEFAULT_SETTINGS.enabledUrls);
+      } else {
+        render(settings);
+        void refreshFirefoxSiteAccessUi(settings.enabledUrls);
+      }
+    },
+  );
+}
+
+async function save(): Promise<void> {
+  const urls = collectUrls();
+  if (urls.length > MAX_ENABLED_URLS) {
+    saveStatus.textContent = `Too many URLs (max ${MAX_ENABLED_URLS}).`;
+    saveStatus.style.color = '#b91c1c';
+    return;
+  }
+
+  const mappings = collectMappings();
+  const hasPartial = [...mappingBody.querySelectorAll('tr')].some((tr) => {
+    const ins = tr.querySelectorAll<HTMLInputElement>('input');
+    if (ins.length < 2) return false;
+    const a = ins[0].value.trim();
+    const b = ins[1].value.trim();
+    return (a && !b) || (!a && b);
+  });
+
+  if (hasPartial) {
+    saveStatus.textContent = 'Each mapping needs both Local Path and Immich Path, or clear the row.';
+    saveStatus.style.color = '#b91c1c';
+    return;
+  }
+
+  const payload = {
+    [STORAGE_KEYS.enabledUrls]: urls,
+    [STORAGE_KEYS.pathMappings]: mappings,
+    [STORAGE_KEYS.replaceFoldersPageNames]: replaceFoldersPageNames.checked,
+    [STORAGE_KEYS.showPartnerIcons]: showPartnerIcons.checked,
+    [STORAGE_KEYS.showOwnProfileIcon]: showOwnProfileIcon.checked,
+    [STORAGE_KEYS.autoOpenFileLocation]: autoOpenFileLocation.checked,
+    [STORAGE_KEYS.remapSlashToFocusSearch]: remapSlashToFocusSearch.checked,
+    [STORAGE_KEYS.googleMapsLinkInInfoPanel]: googleMapsLinkInInfoPanel.checked,
+    [STORAGE_KEYS.googleMapsEmbedInsteadOfOsmInInfoPanel]: googleMapsEmbedInsteadOfOsmInInfoPanel.checked,
+    [STORAGE_KEYS.infoPanelDetailRowFile]: selectedDetailRowMode(DETAIL_ROW_FILE_GROUP),
+    [STORAGE_KEYS.infoPanelDetailRowCamera]: selectedDetailRowMode(DETAIL_ROW_CAMERA_GROUP),
+    [STORAGE_KEYS.infoPanelDetailRowLens]: selectedDetailRowMode(DETAIL_ROW_LENS_GROUP),
+    [STORAGE_KEYS.infoPanelLargeDescriptionField]: infoPanelLargeDescriptionField.checked,
+  };
+
+  await new Promise<void>((resolve) => {
+    chrome.storage.sync.set(payload, () => {
+      void chrome.runtime.lastError;
+      resolve();
+    });
+  });
+
+  const permitted = await hasHostPermissionsForEnabledUrls(urls);
+  await refreshFirefoxSiteAccessUi(urls);
+
+  if (!permitted && firefoxHostPermissionsOptIn()) {
+    saveStatus.style.color = '#b45309';
+    saveStatus.textContent =
+      'Saved settings, but Firefox site access was not granted — click “Allow on Immich URLs”.';
+    return;
+  }
+
+  saveStatus.style.color = '#16a34a';
+  saveStatus.textContent = 'Saved.';
+  setTimeout(() => {
+    saveStatus.textContent = '';
+  }, 2500);
+}
+
+addUrlBtn.addEventListener('click', () => {
+  if (urlList.querySelectorAll('li').length >= MAX_ENABLED_URLS) return;
+  urlList.append(rowUrl(''));
+});
+
+addMappingBtn.addEventListener('click', () => {
+  mappingBody.append(rowMapping('', ''));
+});
+
+saveBtn.addEventListener('click', () => {
+  void save();
+});
+
+grantSiteAccessBtn.addEventListener('click', () => {
+  void (async () => {
+    const urls = collectUrls();
+    const ok = await requestHostPermissionsForEnabledUrls(urls);
+    await refreshFirefoxSiteAccessUi(urls);
+    if (ok) {
+      saveStatus.style.color = '#16a34a';
+      saveStatus.textContent = 'Site access granted.';
+      setTimeout(() => {
+        saveStatus.textContent = '';
+      }, 2500);
+    } else {
+      saveStatus.style.color = '#b91c1c';
+      saveStatus.textContent = 'Site access was not granted.';
+    }
+  })();
+});
+
+showPartnerIcons.addEventListener('change', () => {
+  syncOwnProfileCheckboxEnabled();
+});
+
+load();

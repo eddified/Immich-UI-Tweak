@@ -1,0 +1,117 @@
+.immich-ui-tweak-uploader-overlay {
+  pointer-events: none;
+}
+
+.immich-ui-tweak-uploader-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  flex-shrink: 0;
+}
+
+.immich-ui-tweak-viewer-avatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  overflow: hidden;
+  margin-inline-end: 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+/* Same structure as Immich UserAvatar: <figure> + <img> or <span> */
+.immich-ui-tweak-avatar {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.immich-ui-tweak-avatar--thumb .immich-ui-tweak-avatar-letter {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  user-select: none;
+}
+
+.immich-ui-tweak-avatar--viewer .immich-ui-tweak-avatar-letter {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  user-select: none;
+}
+
+.immich-ui-tweak-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Google Maps row above Immich map (detail panel). */
+.immich-ui-tweak-google-maps-row {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.immich-ui-tweak-google-maps-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.immich-ui-tweak-google-maps-link:hover {
+  text-decoration: underline;
+}
+
+.immich-ui-tweak-google-maps-pin {
+  flex-shrink: 0;
+  display: block;
+  line-height: 0;
+  object-fit: contain;
+}
+
+/* Replace Immich map (OSM tiles) with embedded Google Map */
+#detail-panel div.h-90.immich-ui-tweak-google-maps-embed-host {
+  position: relative;
+}
+
+#detail-panel div.h-90.immich-ui-tweak-google-maps-embed-host > :not([data-immich-ui-tweak-google-maps-embed]) {
+  display: none !important;
+}
+
+.immich-ui-tweak-google-maps-embed-wrap {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+}
+
+.immich-ui-tweak-google-maps-embed-iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/*
+ * Immich asset info description uses Tailwind max-h-40 (~160px) on the autogrow textarea.
+ * Optional override — only this textarea, only when html has the extension toggle class.
+ */
+html.immich-ui-tweak-info-panel-large-description #detail-panel textarea[data-testid='autogrow-textarea'] {
+  max-height: none !important;
+}
