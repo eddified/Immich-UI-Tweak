@@ -756,8 +756,9 @@ function resetFileLocationTrackingIfAssetChanged(): void {
     if (fileLocationAssetKey) {
       pathInjectionUseNativeOnly.delete(fileLocationAssetKey);
       pendingPartnerPathByAssetId.delete(fileLocationAssetKey);
-      assetApiDetailById.delete(fileLocationAssetKey.toLowerCase());
-      assetGpsLookupExhausted.delete(fileLocationAssetKey.toLowerCase());
+      /* Keep assetApiDetailById / assetGpsLookupExhausted — owner, path, and GPS for an asset id
+       * are stable. Clearing them on prev/next made the Google Maps embed tear down before Immich
+       * refetched, leaving OpenStreetMap visible (especially in Chrome with lazy iframes). */
     }
     fileLocationAssetKey = key;
     sawPathLinkThisAsset = false;
@@ -1281,6 +1282,7 @@ function updateGoogleMapsLinkInDetailPanel(): void {
   const lat = detail?.latitude;
   const lng = detail?.longitude;
   if (typeof lat !== 'number' || typeof lng !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    scheduleAssetDetailFetchIfMissing(assetId);
     document.querySelectorAll(`[${GOOGLE_MAPS_ROW_ATTR}]`).forEach((el) => el.remove());
     return;
   }
@@ -1352,6 +1354,27 @@ function googleMapsEmbedIframeSrc(lat: number, lng: number): string {
   return `https://www.google.com/maps?q=${encodeURIComponent(q)}&z=14&output=embed`;
 }
 
+function clearGoogleMapsEmbedOnInactiveDetailPanels(activePanel: HTMLElement): void {
+  forEachDetailPanelInViewers((p) => {
+    if (p === activePanel) return;
+    p.querySelectorAll(`[${GOOGLE_MAPS_EMBED_ATTR}]`).forEach((el) => el.remove());
+    p.querySelectorAll<HTMLElement>(`.${GOOGLE_MAPS_EMBED_HOST_CLASS}`).forEach((el) => {
+      el.classList.remove(GOOGLE_MAPS_EMBED_HOST_CLASS);
+    });
+  });
+}
+
+/** Hide OSM while GPS is still loading; drop embeds tied to a different asset. */
+function prepareGoogleMapsEmbedHostForPendingGps(host: HTMLElement, assetId: string): void {
+  for (const el of document.querySelectorAll<HTMLElement>(`[${GOOGLE_MAPS_EMBED_ATTR}]`)) {
+    if (el.dataset.immichUiTweakGoogleMapsEmbedAsset !== assetId) el.remove();
+  }
+  for (const el of document.querySelectorAll<HTMLElement>(`.${GOOGLE_MAPS_EMBED_HOST_CLASS}`)) {
+    if (el !== host) el.classList.remove(GOOGLE_MAPS_EMBED_HOST_CLASS);
+  }
+  host.classList.add(GOOGLE_MAPS_EMBED_HOST_CLASS);
+}
+
 function updateGoogleMapsEmbedInDetailPanel(): void {
   if (!settingsHydrated || !settings.googleMapsEmbedInsteadOfOsmInInfoPanel) {
     removeGoogleMapsEmbedElements();
@@ -1368,17 +1391,10 @@ function updateGoogleMapsEmbedInDetailPanel(): void {
     return;
   }
 
-  const assetId = parseCurrentAssetId();
-  const detail = assetId ? assetApiDetailById.get(assetId) : undefined;
-  const lat = detail?.latitude;
-  const lng = detail?.longitude;
-  const validGps =
-    typeof lat === 'number' &&
-    typeof lng === 'number' &&
-    Number.isFinite(lat) &&
-    Number.isFinite(lng);
+  clearGoogleMapsEmbedOnInactiveDetailPanels(panel);
 
-  if (!assetId || !validGps) {
+  const assetId = parseCurrentAssetId();
+  if (!assetId) {
     removeGoogleMapsEmbedElements();
     return;
   }
@@ -1388,6 +1404,25 @@ function updateGoogleMapsEmbedInDetailPanel(): void {
     panel.querySelector<HTMLElement>(':scope div.h-90');
   if (!host?.isConnected) {
     removeGoogleMapsEmbedElements();
+    return;
+  }
+
+  const detail = assetApiDetailById.get(assetId);
+  const lat = detail?.latitude;
+  const lng = detail?.longitude;
+  const validGps =
+    typeof lat === 'number' &&
+    typeof lng === 'number' &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng);
+
+  if (!validGps) {
+    scheduleAssetDetailFetchIfMissing(assetId);
+    if (assetGpsLookupExhausted.has(assetId.toLowerCase())) {
+      removeGoogleMapsEmbedElements();
+      return;
+    }
+    prepareGoogleMapsEmbedHostForPendingGps(host, assetId);
     return;
   }
 
@@ -1417,7 +1452,7 @@ function updateGoogleMapsEmbedInDetailPanel(): void {
   iframe.setAttribute('data-testid', 'immich-ui-tweak-google-maps-embed-iframe');
   iframe.title = 'Google Maps';
   iframe.referrerPolicy = 'strict-origin-when-cross-origin';
-  iframe.loading = 'lazy';
+  iframe.loading = 'eager';
   iframe.className = 'immich-ui-tweak-google-maps-embed-iframe';
   iframe.src = src;
   wrap.appendChild(iframe);
