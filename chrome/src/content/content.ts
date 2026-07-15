@@ -486,18 +486,24 @@ const THUMBNAIL_ICON_ROW_CLASSES = [
   'text-shadow-[1px_1px_6px_rgb(0_0_0)]',
 ].join(' ');
 
+/**
+ * The extension's thumbnail uploader badge is absolutely positioned inside the same top-right icon
+ * row Immich uses for its overlay icons (video duration, stack count, live photo, etc.). Using
+ * `inset-inline-end-0` plus a dynamic `marginInlineEnd` lets us offset the badge by the actual width
+ * of those native icons in both LTR and RTL layouts, without relying on DOM order or scanning only
+ * SVG elements.
+ */
 const THUMBNAIL_UPLOADER_PLACEMENT_CLASSES = [
   'immich-ui-tweak-uploader-overlay',
+  'absolute',
+  'end-0',
+  'top-0',
   'pt-2',
+  'pe-2',
   '@max-[99px]:scale-75',
   '@max-[99px]:pt-1',
-  'drop-shadow-[1px_1px_6px_rgb(0_0_0)]',
-].join(' ');
-
-const THUMBNAIL_UPLOADER_SOLO_PLACEMENT_CLASSES = [
-  THUMBNAIL_UPLOADER_PLACEMENT_CLASSES,
-  'pe-2',
   '@max-[99px]:pe-1',
+  'drop-shadow-[1px_1px_6px_rgb(0_0_0)]',
 ].join(' ');
 
 const THUMBNAIL_ICON_LAYER_CLASSES = [
@@ -530,9 +536,15 @@ function thumbnailIconOverlayLayer(thumb: HTMLElement): HTMLElement {
 }
 
 function thumbnailTopRightIconRow(thumb: HTMLElement, iconLayer: HTMLElement): HTMLElement {
-  for (const row of iconLayer.querySelectorAll<HTMLElement>('div.absolute')) {
+  // Search the whole thumbnail for Immich's native top-right icon row rather than scanning a single
+  // overlay layer. This prevents us from attaching to an extension-created empty row and applying
+  // zero offset when native icons live in a different layer/row.
+  for (const row of thumb.querySelectorAll<HTMLElement>('div.absolute')) {
     const cn = row.className;
     if (typeof cn !== 'string') continue;
+    // Skip rows injected by a previous extension run; otherwise we'd hide Immich's native icons
+    // from our measurement and apply no dynamic offset.
+    if (row.dataset.immichUiTweakUploaderRow !== undefined) continue;
     if (
       cn.includes('inset-x-0') &&
       cn.includes('top-0') &&
@@ -543,6 +555,9 @@ function thumbnailTopRightIconRow(thumb: HTMLElement, iconLayer: HTMLElement): H
       return row;
     }
   }
+
+  const existingExtensionRow = iconLayer.querySelector<HTMLElement>('[data-immich-ui-tweak-uploader-row]');
+  if (existingExtensionRow) return existingExtensionRow;
 
   const row = document.createElement('div');
   row.className = THUMBNAIL_ICON_ROW_CLASSES;
@@ -568,54 +583,49 @@ function removeThumbnailUploaderOverlay(thumb: HTMLElement): void {
   }
 }
 
-function placeThumbnailUploader(iconRow: HTMLElement, placement: HTMLElement, firstNativeIcon: Element | undefined): void {
-  if (!firstNativeIcon) {
-    if (placement.parentElement !== iconRow || placement.nextElementSibling !== null) {
-      iconRow.appendChild(placement);
-    }
-    return;
-  }
-
-  const rowReverse = getComputedStyle(iconRow).flexDirection === 'row-reverse';
-  if (rowReverse) {
-    if (placement.parentElement !== iconRow || placement.nextElementSibling !== null) {
-      iconRow.appendChild(placement);
-    }
-    return;
-  }
-
-  if (placement.parentElement !== iconRow || placement.nextElementSibling !== firstNativeIcon) {
-    iconRow.insertBefore(placement, firstNativeIcon);
+function attachPlacementToIconRow(iconRow: HTMLElement, placement: HTMLElement): void {
+  if (placement.parentElement !== iconRow) {
+    iconRow.appendChild(placement);
   }
 }
 
-function reserveThumbnailNativeIconSpace(thumb: HTMLElement, placement: HTMLElement): void {
-  const thumbBox = thumb.getBoundingClientRect();
-  if (thumbBox.width <= 0 || thumbBox.height <= 0) {
-    placement.style.paddingInlineEnd = '';
+/**
+ * Dynamically offset the extension's uploader badge so it sits just to the inline-start of Immich's
+ * native thumbnail overlay icons (video duration, stack count, live photo, etc.).
+ *
+ * The placement is absolutely positioned at the inline-end edge of the shared icon row. We measure
+ * the actual bounding boxes of *all* native icon row children (not just SVGs, so we capture text
+ * labels too), then push the badge toward the inline-start by the full cluster width plus a small
+ * gap. This works for LTR and RTL and avoids a hard-coded icon type check.
+ */
+function reserveThumbnailNativeIconSpace(iconRow: HTMLElement, placement: HTMLElement): void {
+  const rowBox = iconRow.getBoundingClientRect();
+  if (rowBox.width <= 0) {
+    placement.style.marginInlineEnd = '';
     return;
   }
 
-  const rightSideIcons = Array.from(thumb.querySelectorAll<SVGElement>('svg'))
-    .filter((svg) => !svg.closest('.immich-ui-tweak-uploader-overlay'))
-    .map((svg) => svg.getBoundingClientRect())
-    .filter(
-      (box) =>
-        box.width > 0 &&
-        box.height > 0 &&
-        box.x >= thumbBox.x + thumbBox.width / 2 &&
-        box.y >= thumbBox.y &&
-        box.y <= thumbBox.y + thumbBox.height,
-    );
+  const nativeBoxes = Array.from(iconRow.children)
+    .filter((child) => child !== placement && child instanceof HTMLElement)
+    .map((child) => child.getBoundingClientRect())
+    .filter((box) => box.width > 0 && box.height > 0);
 
-  if (rightSideIcons.length === 0) {
-    placement.style.paddingInlineEnd = '';
+  if (nativeBoxes.length === 0) {
+    placement.style.marginInlineEnd = '';
     return;
   }
 
-  const leftmostIconX = Math.min(...rightSideIcons.map((box) => box.x));
-  const reserve = Math.max(0, thumbBox.right - leftmostIconX + 8);
-  placement.style.paddingInlineEnd = `${Math.ceil(reserve)}px`;
+  // Push the placement away from the row's inline-end edge just enough to clear the full native
+  // icon cluster. Using the row edge rather than the cluster width covers cases where Immich's
+  // justify-end icons don't quite touch the edge.
+  const isRtl = getComputedStyle(iconRow).direction === 'rtl';
+  const occupiedFromEnd = isRtl
+    ? Math.max(...nativeBoxes.map((box) => box.right)) - rowBox.left
+    : rowBox.right - Math.min(...nativeBoxes.map((box) => box.left));
+
+  // Small extra gap so the badge is visually separated from the native icons.
+  const reserve = Math.max(0, occupiedFromEnd) + 6;
+  placement.style.marginInlineEnd = `${Math.ceil(reserve)}px`;
 }
 
 function updateThumbnailOverlays(): void {
@@ -650,12 +660,9 @@ function updateThumbnailOverlays(): void {
       placement = document.createElement('span');
       placement.dataset.immichUiTweakUploader = '';
     }
-    const firstNativeIcon = Array.from(iconRow.children).find((el) => el !== placement);
-    placement.className = firstNativeIcon
-      ? THUMBNAIL_UPLOADER_PLACEMENT_CLASSES
-      : THUMBNAIL_UPLOADER_SOLO_PLACEMENT_CLASSES;
-    placeThumbnailUploader(iconRow, placement, firstNativeIcon);
-    reserveThumbnailNativeIconSpace(thumb, placement);
+    placement.className = THUMBNAIL_UPLOADER_PLACEMENT_CLASSES;
+    attachPlacementToIconRow(iconRow, placement);
+    reserveThumbnailNativeIconSpace(iconRow, placement);
 
     let badge = placement.querySelector<HTMLElement>('.immich-ui-tweak-uploader-badge');
     if (!badge) {
