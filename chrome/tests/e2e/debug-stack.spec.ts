@@ -5,9 +5,10 @@ const DEMO = demoOrigin();
 const TARGET = '3604f14f-ab23-4aee-a6d5-92a15d8f5b2c';
 
 test('debug stack icon stacking', async ({ context, extensionId }) => {
+  test.skip(true, "saved for later - if/when we want to check overlay placement relative to other icons like the stack icon. It is useful for finding a photo on the main timeline");
   const appPage = await context.newPage();
   await loginDemoImmich(appPage);
-  await appPage.goto(`${DEMO}/photos`, { waitUntil: 'load', timeout: 60_000 });
+  await appPage.goto(`${DEMO}/photos?at=${TARGET}`, { waitUntil: 'load', timeout: 60_000 });
 
   const thumb = appPage.locator(`[data-asset="${TARGET}"]`).first();
   await expect(thumb).toBeVisible({ timeout: 30_000 });

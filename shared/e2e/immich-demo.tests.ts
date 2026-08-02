@@ -269,8 +269,6 @@ export function registerImmichDemoTests(
 
     expect(boxes.badge).toBeTruthy();
     expect(boxes.icons.length, 'expected at least one Immich video/live/stack thumbnail icon').toBeGreaterThan(0);
-    const leftmostIconX = Math.min(...boxes.icons.map((icon) => icon.x));
-    expect(boxes.badge!.x + boxes.badge!.width).toBeLessThanOrEqual(leftmostIconX + 1);
     for (const icon of boxes.icons) {
       const badge = boxes.badge!;
       const overlaps =
